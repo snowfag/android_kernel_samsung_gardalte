@@ -128,7 +128,7 @@ static void hid_reset(struct work_struct *work)
  */
 		if (rc == 0)
 #endif
-		hid_start_in(hid);
+			hid_start_in(hid);
 	}
 
 	else if (test_bit(HID_RESET_PENDING, &usbhid->iofl)) {

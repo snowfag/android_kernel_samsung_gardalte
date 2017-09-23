@@ -143,10 +143,10 @@ int s3c64xx_spi0_cfg_gpio(struct platform_device *dev)
 		for (gpio = EXYNOS3_GPB(0); gpio < EXYNOS3_GPB(4); gpio++)
 			s5p_gpio_set_drvstr(gpio, S5P_GPIO_DRVSTR_LV3);
 	} else {
-	s3c_gpio_cfgpin(EXYNOS4_GPB(0), S3C_GPIO_SFN(2));
-	s3c_gpio_setpull(EXYNOS4_GPB(0), S3C_GPIO_PULL_UP);
-	s3c_gpio_cfgall_range(EXYNOS4_GPB(2), 2,
-			      S3C_GPIO_SFN(2), S3C_GPIO_PULL_UP);
+		s3c_gpio_cfgpin(EXYNOS4_GPB(0), S3C_GPIO_SFN(2));
+		s3c_gpio_setpull(EXYNOS4_GPB(0), S3C_GPIO_PULL_UP);
+		s3c_gpio_cfgall_range(EXYNOS4_GPB(2), 2,
+				      S3C_GPIO_SFN(2), S3C_GPIO_PULL_UP);
 
 		for (gpio = EXYNOS4_GPB(0); gpio < EXYNOS4_GPB(4); gpio++)
 			s5p_gpio_set_drvstr(gpio, S5P_GPIO_DRVSTR_LV3);
@@ -214,10 +214,10 @@ int s3c64xx_spi1_cfg_gpio(struct platform_device *dev)
 		for (gpio = EXYNOS3_GPB(4); gpio < EXYNOS3_GPB(8); gpio++)
 			s5p_gpio_set_drvstr(gpio, S5P_GPIO_DRVSTR_LV3);
 	} else {
-	s3c_gpio_cfgpin(EXYNOS4_GPB(4), S3C_GPIO_SFN(2));
-	s3c_gpio_setpull(EXYNOS4_GPB(4), S3C_GPIO_PULL_UP);
-	s3c_gpio_cfgall_range(EXYNOS4_GPB(6), 2,
-			      S3C_GPIO_SFN(2), S3C_GPIO_PULL_UP);
+		s3c_gpio_cfgpin(EXYNOS4_GPB(4), S3C_GPIO_SFN(2));
+		s3c_gpio_setpull(EXYNOS4_GPB(4), S3C_GPIO_PULL_UP);
+		s3c_gpio_cfgall_range(EXYNOS4_GPB(6), 2,
+				      S3C_GPIO_SFN(2), S3C_GPIO_PULL_UP);
 
 		for (gpio = EXYNOS4_GPB(4); gpio < EXYNOS4_GPB(8); gpio++)
 			s5p_gpio_set_drvstr(gpio, S5P_GPIO_DRVSTR_LV3);
@@ -277,10 +277,10 @@ int s3c64xx_spi2_cfg_gpio(struct platform_device *dev)
 		for (gpio = EXYNOS5_GPB1(1); gpio < EXYNOS5_GPB1(5); gpio++)
 			s5p_gpio_set_drvstr(gpio, S5P_GPIO_DRVSTR_LV3);
 	} else {
-	s3c_gpio_cfgpin(EXYNOS4_GPC1(1), S3C_GPIO_SFN(5));
-	s3c_gpio_setpull(EXYNOS4_GPC1(1), S3C_GPIO_PULL_UP);
-	s3c_gpio_cfgall_range(EXYNOS4_GPC1(3), 2,
-			      S3C_GPIO_SFN(5), S3C_GPIO_PULL_UP);
+		s3c_gpio_cfgpin(EXYNOS4_GPC1(1), S3C_GPIO_SFN(5));
+		s3c_gpio_setpull(EXYNOS4_GPC1(1), S3C_GPIO_PULL_UP);
+		s3c_gpio_cfgall_range(EXYNOS4_GPC1(3), 2,
+				      S3C_GPIO_SFN(5), S3C_GPIO_PULL_UP);
 
 		for (gpio = EXYNOS4_GPC1(1); gpio < EXYNOS4_GPC1(5); gpio++)
 			s5p_gpio_set_drvstr(gpio, S5P_GPIO_DRVSTR_LV3);

@@ -65,7 +65,7 @@ obj-$(CONFIG_ARM_EXYNOS5250_CPUFREQ)	+= exynos5250-cpufreq.o
 obj-$(CONFIG_ARM_EXYNOS5260_CPUFREQ)	+= exynos5260-eagle-cpufreq.o exynos5260-kfc-cpufreq.o
 obj-$(CONFIG_ARM_EXYNOS5410_CPUFREQ)	+= exynos5410-cpufreq.o
 obj-$(CONFIG_ARM_EXYNOS5420_CPUFREQ)	+= exynos5420-cpufreq.o
-obj-$(CONFIG_ARM_OMAP2PLUS_CPUFREQ)     += omap-cpufreq.o
+obj-$(CONFIG_ARM_OMAP2PLUS_CPUFREQ)	+= omap-cpufreq.o
 obj-$(CONFIG_EXYNOS5_DYNAMIC_CPU_HOTPLUG)	+= dm_cpu_hotplug.o
 ifeq ($(CONFIG_SOC_EXYNOS3470),y)
 obj-$(CONFIG_EXYNOS_DM_CPU_HOTPLUG)     += dm_cpu_hotplug_exynos3470.o

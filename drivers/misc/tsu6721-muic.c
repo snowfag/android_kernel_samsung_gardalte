@@ -990,9 +990,6 @@ static void tsu6721_muic_handle_attach(struct tsu6721_muic_data *muic_data,
 			ret = detach_deskdock(muic_data);
 		}
 		break;
-	case ATTACHED_DEV_UNKNOWN_VB_MUIC:
-		ret = detach_charger(muic_data);
-		break;
 	default:
 		break;
 	}
@@ -1021,10 +1018,6 @@ static void tsu6721_muic_handle_attach(struct tsu6721_muic_data *muic_data,
 		break;
 	case ATTACHED_DEV_DESKDOCK_MUIC:
 		ret = attach_deskdock(muic_data, new_dev, vbvolt);
-		break;
-	case ATTACHED_DEV_UNKNOWN_VB_MUIC:
-		com_to_open_with_vbus(muic_data);
-		ret = attach_charger(muic_data, new_dev);
 		break;
 	default:
 		pr_warn("%s:%s unsupported dev=%d, adc=0x%x, vbus=%c\n",
@@ -1062,7 +1055,6 @@ static void tsu6721_muic_handle_detach(struct tsu6721_muic_data *muic_data)
 		pr_info("%s:%s duplicated(NONE)\n", MUIC_DEV_NAME, __func__);
 		break;
 	case ATTACHED_DEV_UNKNOWN_MUIC:
-	case ATTACHED_DEV_UNKNOWN_VB_MUIC:
 		pr_info("%s:%s UNKNOWN\n", MUIC_DEV_NAME, __func__);
 		ret = detach_charger(muic_data);
 		muic_data->attached_dev = ATTACHED_DEV_NONE_MUIC;
@@ -1116,9 +1108,9 @@ static void tsu6721_muic_detect_dev(struct tsu6721_muic_data *muic_data)
 		new_dev = ATTACHED_DEV_USB_MUIC;
 		break;
 	case DEV_TYPE1_DEDICATED_CHG:
+	case DEV_TYPE1_T1_T2_CHG:
 		intr = MUIC_INTR_ATTACH;
 		new_dev = ATTACHED_DEV_TA_MUIC;
-		pr_info("%s : DEDICATED CHARGER DETECTED\n", MUIC_DEV_NAME);
 		break;
 	default:
 		break;
@@ -1148,39 +1140,12 @@ static void tsu6721_muic_detect_dev(struct tsu6721_muic_data *muic_data)
 	}
 
 	switch (adc) {
-	case ADC_AUDIOMODE_W_REMOTE : /* 0x11110 1M ohm */
-	case ADC_UART_CABLE : /* 150k ohm */
-	case ADC_SEND_END ... ADC_REMOTE_S12:
-		pr_info("%s:%s undefined ADC(0x%02x)\n", MUIC_DEV_NAME,
-				__func__, adc);
-		if(vbvolt)
-		{
-			intr = MUIC_INTR_ATTACH;
-			new_dev = ATTACHED_DEV_UNKNOWN_VB_MUIC;
-                        pr_info("%s : UNDEFINED VB DETECTED\n", MUIC_DEV_NAME);
-                }
-		else
-			intr = MUIC_INTR_DETACH;
-		break;
-        case ADC_RESERVED_VZW ... (ADC_UART_CABLE -1) : 
+	case ADC_SEND_END ... (ADC_CEA936ATYPE1_CHG - 1):
 		pr_warn("%s:%s unsupported ADC(0x%02x)\n", MUIC_DEV_NAME,
 				__func__, adc);
 		intr = MUIC_INTR_DETACH;
 		break;
-	case ADC_CEA936ATYPE1_CHG : /*200k ohm */
-#ifdef CONFIG_MUIC_TSU6721_200K_USB
-		intr = MUIC_INTR_ATTACH;
-		/* This is workaournd for LG USB cable which has 219k ohm ID */
-		new_dev = ATTACHED_DEV_USB_MUIC;
-		pr_info("%s : TYPE1 CHARGER DETECTED(USB)\n", MUIC_DEV_NAME);
-		break;
-#endif
-	case ADC_CEA936ATYPE2_CHG:
-		intr = MUIC_INTR_ATTACH;
-		new_dev = ATTACHED_DEV_TA_MUIC;
-		pr_info("%s : TYPE1/2 CHARGER DETECTED(TA)\n", MUIC_DEV_NAME);
-		break;
-	case ADC_JIG_USB_OFF: /* 255k */
+	case ADC_JIG_USB_OFF:
 		if (new_dev != ATTACHED_DEV_JIG_USB_OFF_MUIC) {
 			intr = MUIC_INTR_ATTACH;
 			new_dev = ATTACHED_DEV_JIG_USB_OFF_MUIC;
@@ -1256,6 +1221,8 @@ static void tsu6721_muic_detect_dev(struct tsu6721_muic_data *muic_data)
 		}
 	}
 
+	/* HACK */
+#ifndef CONFIG_MACH_KMINI
 	/* WorkAround for ghost_usb_attach after detaching DESKDOCK */
 	/* USB without VBUS is not possible */
 	if ( new_dev == ATTACHED_DEV_USB_MUIC && !vbvolt)
@@ -1263,6 +1230,7 @@ static void tsu6721_muic_detect_dev(struct tsu6721_muic_data *muic_data)
 			new_dev = ATTACHED_DEV_UNKNOWN_MUIC;
 			intr = MUIC_INTR_DETACH;
 	}
+#endif
 
 	if (intr == MUIC_INTR_ATTACH) {
 		tsu6721_muic_handle_attach(muic_data, new_dev, adc, vbvolt);
@@ -1495,6 +1463,11 @@ static int tsu6721_muic_probe(struct i2c_client *i2c,
 	i2c_set_clientdata(i2c, muic_data);
 
 	muic_data->switch_data = &sec_switch_data;
+
+	/* HACK */
+#ifdef CONFIG_MACH_KMINI
+	switch_sel = 0x3;
+#endif
 
 	if (pdata->init_gpio_cb)
 		ret = pdata->init_gpio_cb(get_switch_sel());

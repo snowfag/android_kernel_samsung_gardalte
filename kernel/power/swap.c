@@ -371,16 +371,16 @@ static int swap_write_page(struct swap_map_handle *handle, void *buf,
 		handle->cur_swap = offset;
 		handle->k = 0;
 
-	if (bio_chain && low_free_pages() <= handle->reqd_free_pages) {
-		error = hib_wait_on_bio_chain(bio_chain);
-		if (error)
-			goto out;
+		if (bio_chain && low_free_pages() <= handle->reqd_free_pages) {
+			error = hib_wait_on_bio_chain(bio_chain);
+			if (error)
+				goto out;
 			/*
 			 * Recalculate the number of required free pages, to
 			 * make sure we never take more than half.
 			 */
-		handle->reqd_free_pages = reqd_free_pages();
-	}
+			handle->reqd_free_pages = reqd_free_pages();
+		}
 	}
  out:
 	return error;

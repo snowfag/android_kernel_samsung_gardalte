@@ -375,7 +375,8 @@ int rt5033_init_irq(rt5033_mfd_chip_t *chip)
 
 	chip->irq = gpio_to_irq(chip->pdata->irq_gpio);
 	ret = request_threaded_irq(chip->irq, NULL, rt5033_irq_handler,
-			IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_SUSPEND,
+			/* IRQF_TRIGGER_FALLING */
+			IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_NO_SUSPEND,
 			"rt5033", chip);
 	if (ret <0) {
 		pr_err("%s : Failed : request IRQ (%d)\n", __func__, ret);

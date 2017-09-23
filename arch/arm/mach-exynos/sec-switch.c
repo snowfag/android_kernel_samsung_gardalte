@@ -195,15 +195,19 @@ int current_cable_type = POWER_SUPPLY_TYPE_BATTERY;
 static int muic_charger_cb(enum muic_attached_dev cable_type)
 {
 	struct power_supply *psy = power_supply_get_by_name("battery");
+	struct power_supply *psy_p = power_supply_get_by_name("ps");
 	union power_supply_propval value;
+	static enum muic_attached_dev previous_cable_type = ATTACHED_DEV_NONE_MUIC;
 
-	pr_info("%s:%s %d\n", MUIC_DEV_NAME, __func__, cable_type);
+	pr_info("%s:%s CB enabled(%d), prev_cable(%d)\n", MUIC_DEV_NAME, __func__,
+		cable_type, previous_cable_type);
 
 	switch (cable_type) {
 	case ATTACHED_DEV_NONE_MUIC:
 	case ATTACHED_DEV_OTG_MUIC:
 	case ATTACHED_DEV_JIG_UART_OFF_MUIC:
 	case ATTACHED_DEV_JIG_UART_ON_MUIC:
+	case ATTACHED_DEV_PS_CABLE_MUIC:
 		is_cable_attached = false;
 		break;
 	case ATTACHED_DEV_USB_MUIC:
@@ -223,6 +227,12 @@ static int muic_charger_cb(enum muic_attached_dev cable_type)
 	default:
 		pr_err("%s: invalid type:%d\n", __func__, cable_type);
 		return -EINVAL;
+	}
+
+	/*  charger setting */
+	if (previous_cable_type == cable_type) {
+		pr_info("%s: SKIP cable setting\n", __func__);
+		goto skip_cable_setting;
 	}
 
 	switch (cable_type) {
@@ -254,23 +264,37 @@ static int muic_charger_cb(enum muic_attached_dev cable_type)
 	case ATTACHED_DEV_LANHUB_MUIC:
 		current_cable_type = POWER_SUPPLY_TYPE_LAN_HUB;
 		break;
+	case ATTACHED_DEV_PS_CABLE_MUIC:
+		current_cable_type = POWER_SUPPLY_TYPE_POWER_SHARING;
+		break;
 	default:
 		pr_err("%s:%s invalid type:%d\n", MUIC_DEV_NAME, __func__,
 				cable_type);
 		goto skip;
 	}
 
-	if (!psy || !psy->set_property)
-		pr_err("%s: fail to get battery psy\n", __func__);
-	else {
-		value.intval = current_cable_type;
-		psy->set_property(psy, POWER_SUPPLY_PROP_ONLINE, &value);
+	if (!psy || !psy->set_property || !psy_p || !psy_p->set_property) {
+		pr_err("%s: fail to get battery/ps psy\n", __func__);
+	} else {
+		if (current_cable_type == POWER_SUPPLY_TYPE_POWER_SHARING) {
+			value.intval = current_cable_type;
+			psy_p->set_property(psy_p, POWER_SUPPLY_PROP_ONLINE, &value);
+		} else {
+			if (previous_cable_type == ATTACHED_DEV_PS_CABLE_MUIC) {
+				value.intval = current_cable_type;
+				psy_p->set_property(psy_p, POWER_SUPPLY_PROP_ONLINE, &value);
+			}
+			value.intval = current_cable_type;
+			psy->set_property(psy, POWER_SUPPLY_PROP_ONLINE, &value);
+		}
 	}
 #if defined(CONFIG_TOUCHSCREEN_ZINITIX_BT532)	//DegasLTE
 	tsp_charger_infom(is_cable_attached);
 #endif
 
 skip:
+	previous_cable_type = cable_type;
+skip_cable_setting:
 	return 0;
 }
 #else
@@ -300,7 +324,7 @@ static int muic_charger_cb(enum muic_attached_dev cable_type)
 	#endif
 	case ATTACHED_DEV_TA_MUIC:
 	case ATTACHED_DEV_CDP_MUIC:
-	case ATTACHED_DEV_UNKNOWN_VB_MUIC:
+	case ATTACHED_DEV_CARDOCK_MUIC:
 	case ATTACHED_DEV_AUDIODOCK_MUIC:
 	case ATTACHED_DEV_JIG_UART_OFF_VB_MUIC:
 		is_cable_attached = true;
@@ -333,7 +357,7 @@ static int muic_charger_cb(enum muic_attached_dev cable_type)
 		break;
 	case ATTACHED_DEV_DESKDOCK_MUIC:
 	case ATTACHED_DEV_AUDIODOCK_MUIC:
-	case ATTACHED_DEV_UNKNOWN_VB_MUIC:
+	case ATTACHED_DEV_CARDOCK_MUIC:
 		current_cable_type = POWER_SUPPLY_TYPE_MISC;
 		break;
 	default:

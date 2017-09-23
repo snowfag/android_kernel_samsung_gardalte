@@ -680,7 +680,7 @@ static int s3c_rtc_resume(struct platform_device *pdev)
 		writel(ticnt_save, s3c_rtc_base + S3C2410_TICNT);
 
 		if (ticnt_en_save) {
-		tmp = readw(s3c_rtc_base + S3C2410_RTCCON);
+			tmp = readw(s3c_rtc_base + S3C2410_RTCCON);
 			writew(tmp | ticnt_en_save,
 			       s3c_rtc_base + S3C2410_RTCCON);
 		}

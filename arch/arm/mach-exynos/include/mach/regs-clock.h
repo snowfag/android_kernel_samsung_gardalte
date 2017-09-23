@@ -531,7 +531,7 @@ void wait_clkdiv_stable_time(void __iomem *reg,
 
 #define EXYNOS4_APLL_LOCK			EXYNOS_CLKREG(0x14000)
 #define EXYNOS4_MPLL_LOCK			(soc_is_exynos4210() ? \
-						EXYNOS_CLKREG(0x14004) :  \
+						EXYNOS_CLKREG(0x14004) : \
 						EXYNOS_CLKREG(0x10008))
 #define EXYNOS4_APLL_CON0			EXYNOS_CLKREG(0x14100)
 #define EXYNOS4_APLL_CON1			EXYNOS_CLKREG(0x14104)

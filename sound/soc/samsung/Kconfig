@@ -180,8 +180,8 @@ config SND_SOC_SAMSUNG_XYREF5260_ES515
 	select SND_SOC_ES515_I2S
 	select SND_SOC_ES515_I2C
 	select SND_SOC_DUMMY_CODEC
-	help
-		Say Y if you want to add support for SoC audio on the SMDKs.
+        help
+                Say Y if you want to add support for SoC audio on the SMDKs.
 
 menuconfig SND_SAMSUNG_LP
 	bool "Lower power audio support"

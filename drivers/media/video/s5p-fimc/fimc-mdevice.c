@@ -136,7 +136,7 @@ static int fimc_pipeline_s_power(struct fimc_pipeline *p, bool state)
 
 		ret = __subdev_set_power(p->subdevs[idx], state);
 		if (ret < 0 && ret != -ENXIO)
-		return ret;
+			return ret;
 	}
 
 	return 0;
@@ -144,14 +144,14 @@ static int fimc_pipeline_s_power(struct fimc_pipeline *p, bool state)
 
 /**
  * __fimc_pipeline_open - update the pipeline information, enable power
- *                              of all pipeline subdevs and the sensor clock
+ *                        of all pipeline subdevs and the sensor clock
  * @me: media entity to start graph walk with
  * @prep: true to acquire sensor (and csis) subdevs
  *
  * This function must be called with the graph mutex held.
  */
 static int __fimc_pipeline_open(struct fimc_pipeline *p,
-				      struct media_entity *me, bool prep)
+				struct media_entity *me, bool prep)
 {
 	int ret;
 
@@ -261,13 +261,13 @@ int fimc_pipeline_s_stream(struct fimc_pipeline *p, bool on)
 		/* 1. FIMC SUBDEV */
 		if (p->subdevs[IDX_FIMC])
 			ret = v4l2_subdev_call(p->subdevs[IDX_FIMC],
-				       video, s_stream, on);
+							video, s_stream, on);
 		if (ret < 0 && ret != -ENOIOCTLCMD && ret != -ENODEV)
-		return ret;
+			return ret;
 		/* 2. SENSOR SUBDEV */
 		if (p->subdevs[IDX_SENSOR])
 			ret = v4l2_subdev_call(p->subdevs[IDX_SENSOR],
-				       video, s_stream, on);
+							video, s_stream, on);
 		if (ret < 0 && ret != -ENOIOCTLCMD && ret != -ENODEV)
 			return ret;
 		/* 3. IS-ISP SUBDEV */;
@@ -456,7 +456,7 @@ static int fimc_register_callback(struct device *dev, void *p)
 			 fimc->id, ret);
 	}
 
-		return ret;
+	return ret;
 }
 
 static int fimc_lite_register_callback(struct device *dev, void *p)
@@ -577,7 +577,7 @@ static int fimc_md_register_platform_entities(struct fimc_md *fmd)
 		ret = driver_for_each_device(driver, NULL, fmd,
 					     fimc_lite_register_callback);
 		if (ret)
-	return ret;
+			return ret;
 		module_put(driver->owner);
 	}
 
@@ -694,7 +694,7 @@ static int fimc_md_create_links(struct fimc_md *fmd)
 			v4l2_warn(&fmd->v4l2_dev,
 				"(%d) fimc_sensor_info = NULL!!\n", j);
 			continue;
-	}
+		}
 		pdata = &s_info->pdata;
 		switch (pdata->bus_type) {
 		case FIMC_ITU_601...FIMC_ITU_656:
@@ -715,43 +715,43 @@ static int fimc_md_create_links(struct fimc_md *fmd)
 					      &csis->entity, CSIS_PAD_SINK,
 					      flags);
 			if (ret)
-	return ret;
+				return ret;
 
 			v4l2_info(&fmd->v4l2_dev, "created link [%s] -> [%s]",
 				  sensor->entity.name, csis->entity.name);
 
 			/* 2. create link beween mipi-csi and fimc */
 			source = &csis->entity;
-	for (i = 0; i < FIMC_MAX_DEVS; i++) {
-		if (!fmd->fimc[i])
+			for (i = 0; i < FIMC_MAX_DEVS; i++) {
+				if (!fmd->fimc[i])
 					continue;
-		/*
-		 * Some FIMC variants are not fitted with camera capture
-		 * interface. Skip creating a link from sensor for those.
-		 */
+				/*
+				 * Some FIMC variants are not fitted with camera capture
+				 * interface. Skip creating a link from sensor for those.
+				 */
 				if (!fmd->fimc[i]->variant->has_cam_if)
-			continue;
+					continue;
 				sink = &fmd->fimc[i]->vid_cap.subdev.entity;
 
 				ret = media_entity_create_link(source,
 					CSIS_PAD_SOURCE,
 					sink,
-					      FIMC_SD_PAD_SINK, flags);
-		if (ret)
-			return ret;
+					FIMC_SD_PAD_SINK, flags);
+				if (ret)
+					return ret;
 
-		/* Notify FIMC capture subdev entity */
+				/* Notify FIMC capture subdev entity */
 				ret = media_entity_call(sink, link_setup,
 					&sink->pads[FIMC_SD_PAD_SINK],
 					&source->pads[CSIS_PAD_SOURCE], flags);
 
-		if (ret)
-			break;
+				if (ret)
+					break;
 				v4l2_info(&fmd->v4l2_dev,
 					"created link [%s] %c> [%s]",
 					source->name, flags ? '=' : '-',
 					sink->name);
-	}
+			}
 			break;
 		case FIMC_IS_WB:
 			/* 1. create link beween sensor and mipi-csi */
@@ -786,7 +786,7 @@ static int fimc_md_create_links(struct fimc_md *fmd)
 					&sink->pads[FLITE_SD_PAD_SINK],
 					flags);
 			if (ret)
-			break;
+				break;
 
 			v4l2_info(&fmd->v4l2_dev, "created link [%s] -> [%s]",
 				source->name, sink->name);
@@ -938,8 +938,8 @@ static void fimc_md_put_clocks(struct fimc_md *fmd)
 }
 
 static int __fimc_md_set_camclk(struct fimc_md *fmd,
-					 struct fimc_sensor_info *s_info,
-					 bool on)
+				struct fimc_sensor_info *s_info,
+				bool on)
 {
 	struct s5p_fimc_isp_info *pdata = &s_info->pdata;
 	struct fimc_camclk_info *camclk;
@@ -962,8 +962,8 @@ static int __fimc_md_set_camclk(struct fimc_md *fmd,
 			clk_set_rate(camclk->clock, pdata->clk_frequency);
 			camclk->frequency = pdata->clk_frequency;
 			ret = clk_enable(camclk->clock);
-		dbg("Enabled camclk %d: f: %lu", pdata->clk_id,
-		    clk_get_rate(camclk->clock));
+			dbg("Enabled camclk %d: f: %lu", pdata->clk_id,
+			    clk_get_rate(camclk->clock));
 
 			if (pdata->is_sensor_info)
 				ret = clk_enable(fmd->wbclk[CLK_IDX_WB_B]);
@@ -1024,7 +1024,7 @@ static int fimc_md_link_notify(struct media_pad *source,
 		pipeline = &fimc_lite->pipeline;
 		break;
 	case FIMC_GROUP_ID:
-	fimc = v4l2_get_subdevdata(sd);
+		fimc = v4l2_get_subdevdata(sd);
 		pipeline = &fimc->pipeline;
 		break;
 	default:
@@ -1037,9 +1037,9 @@ static int fimc_md_link_notify(struct media_pad *source,
 		pipeline->subdevs[IDX_CSIS] = NULL;
 
 		if (fimc) {
-		mutex_lock(&fimc->lock);
-		fimc_ctrls_delete(fimc->vid_cap.ctx);
-		mutex_unlock(&fimc->lock);
+			mutex_lock(&fimc->lock);
+			fimc_ctrls_delete(fimc->vid_cap.ctx);
+			mutex_unlock(&fimc->lock);
 		}
 		return ret;
 	}
@@ -1049,14 +1049,14 @@ static int fimc_md_link_notify(struct media_pad *source,
 	 * Recreate the controls destroyed during the link deactivation.
 	 */
 	if (fimc) {
-	mutex_lock(&fimc->lock);
-	if (fimc->vid_cap.refcnt > 0) {
+		mutex_lock(&fimc->lock);
+		if (fimc->vid_cap.refcnt > 0) {
 			ret = __fimc_pipeline_open(pipeline,
 						   source->entity, true);
 		if (!ret)
 			ret = fimc_capture_ctrls_create(fimc);
-	}
-	mutex_unlock(&fimc->lock);
+		}
+		mutex_unlock(&fimc->lock);
 	} else {
 		mutex_lock(&fimc_lite->lock);
 		ret = __fimc_pipeline_open(pipeline, source->entity, true);
@@ -1174,9 +1174,9 @@ static int fimc_md_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_unlock;
 
-		platform_set_drvdata(pdev, fmd);
+	platform_set_drvdata(pdev, fmd);
 	mutex_unlock(&fmd->media_dev.graph_mutex);
-		return 0;
+	return 0;
 
 err_unlock:
 	mutex_unlock(&fmd->media_dev.graph_mutex);

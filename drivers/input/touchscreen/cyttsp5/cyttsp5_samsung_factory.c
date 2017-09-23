@@ -40,6 +40,12 @@
 #define MAX_GIDAC_NODES 32
 #define MAX_LIDAC_NODES (MAX_GIDAC_NODES * 30)
 
+#define RECAL_FALSELY_CALED_PANEL
+#define SPEC_MUT_RAW_MIN (-19500)
+#define SPEC_MUT_RAW_MAX (5008)
+#define SPEC_SELF_RAW_MIN (-20000)
+#define SPEC_SELF_RAW_MAX (20000)
+
 extern struct class *sec_class;
 
 enum {
@@ -91,6 +97,7 @@ static void fast_glove_mode(void *device_data);
 static void baseline_reset(void *device_data);
 static void report_rate(void *device_data);
 static void stylus_enable(void *device_data);
+static void reset_and_calibrate(void *device_data);
 static void not_support_cmd(void *device_data);
 
 /************************************************************************
@@ -125,6 +132,7 @@ struct factory_cmd factory_cmds[] = {
 	{FACTORY_CMD("baseline_reset", baseline_reset),},
 	{FACTORY_CMD("report_rate", report_rate),},
 	{FACTORY_CMD("stylus_enable", stylus_enable),},
+	{FACTORY_CMD("reset_and_calibrate", reset_and_calibrate),},
 	{FACTORY_CMD("not_support_cmd", not_support_cmd),},
 };
 
@@ -516,136 +524,6 @@ static void get_difference(void *device_data)
 	get_raw_diff(sfd, &sfd->diff);
 }
 
-static void find_max_min_s16(u8* buf, int num_nodes, s16 *max_value, s16 *min_value)
-{
-	int i;
-	*max_value = 0x8000;
-	*min_value = 0x7FFF;
-
-	for (i = 0 ; i < num_nodes ; i++) {
-		*max_value = max((s16)*max_value, (s16)get_unaligned_le16(buf));
-		*min_value = min((s16)*min_value, (s16)get_unaligned_le16(buf));
-		buf += 2;
-	}
-}
-static void find_max_min_s8(u8* buf, int num_nodes, s16 *max_value, s16 *min_value)
-{
-	int i;
-	*max_value = 0x8000;
-	*min_value = 0x7FFF;
-
-	for (i = 0 ; i < num_nodes ; i++) {
-		*max_value = max((s8)*max_value, (s8)(*buf));
-		*min_value = min((s8)*min_value, (s8)(*buf));
-		buf += 1;
-	}
-}
-
-static int retrieve_panel_scan(struct cyttsp5_samsung_factory_data* sfd,
-		u8* buf, u8 data_id, int num_nodes, u8* r_element_size/*in bytes*/)
-{
-	int rc = 0;
-	int elem = num_nodes;
-	int elem_offset = 0;
-	u16 actual_read_len;
-	u8 config;
-	u16 length;
-	u8 *buf_offset;
-	u8 element_size = 0;
-
-	/* fill buf with header and data */
-	rc = sfd->corecmd->cmd->retrieve_panel_scan(sfd->dev, 0, elem_offset, elem,
-		data_id, buf, &config, &actual_read_len, NULL);
-	if (rc < 0)
-		goto end;
-
-	length = get_unaligned_le16(buf);
-	buf_offset = buf + length;
-
-	element_size = config & CY_CMD_RET_PANEL_ELMNT_SZ_MASK;
-	*r_element_size = element_size;
-
-	elem -= actual_read_len;
-	elem_offset = actual_read_len;
-	while (elem > 0) {
-		/* append data to the buf */
-		rc = sfd->corecmd->cmd->retrieve_panel_scan(sfd->dev, 0, elem_offset, elem,
-				data_id, NULL, &config, &actual_read_len, buf_offset);
-		if (rc < 0)
-			goto end;
-
-		if (!actual_read_len)
-			break;
-
-		length += actual_read_len * element_size;
-		buf_offset = buf + length;
-		elem -= actual_read_len;
-		elem_offset += actual_read_len;
-	}
-end:
-	return rc;
-}
-
-static int panel_scan_and_retrieve(struct cyttsp5_samsung_factory_data* sfd,
-		u8 data_id, struct cyttsp5_sfd_panel_scan_data *panel_scan_data)
-{
-	struct device *dev = sfd->dev;
-	int rc = 0;
-
-	tsp_debug_dbg(false, sfd->dev, "%s, line=%d\n", __func__, __LINE__ );
-
-	rc = cyttsp5_request_exclusive(dev, CY_REQUEST_EXCLUSIVE_TIMEOUT);
-	if (rc < 0) {
-		tsp_debug_err(true, dev, "%s: request exclusive failed(%d)\n",
-			__func__, rc);
-		return rc;
-	}
-
-	rc = sfd->corecmd->cmd->suspend_scanning(dev, 0);
-	if (rc < 0) {
-		tsp_debug_err(true, dev, "%s: suspend scanning failed r=%d\n",
-			__func__, rc);
-		goto release_exclusive;
-	}
-
-	rc = sfd->corecmd->cmd->exec_panel_scan(dev, 0);
-	if (rc < 0) {
-		tsp_debug_err(true, dev, "%s: exec panel scan failed r=%d\n",
-			__func__, rc);
-		goto release_exclusive;
-	}
-
-	rc = retrieve_panel_scan(sfd, panel_scan_data->buf, data_id,
-		sfd->num_all_nodes, &panel_scan_data->element_size);
-	if (rc < 0) {
-		tsp_debug_err(true, dev,
-			"%s: retrieve_panel_scan raw count failed r=%d\n",
-			__func__, rc);
-		goto release_exclusive;
-	}
-
-	if (panel_scan_data->element_size == 2)
-		find_max_min_s16(panel_scan_data->buf + CY_CMD_RET_PANEL_HDR,
-			sfd->num_all_nodes, &panel_scan_data->max, &panel_scan_data->min);
-	else
-		find_max_min_s8(panel_scan_data->buf + CY_CMD_RET_PANEL_HDR,
-			sfd->num_all_nodes, &panel_scan_data->max, &panel_scan_data->min);
-
-	rc = sfd->corecmd->cmd->resume_scanning(dev, 0);
-	if (rc < 0) {
-		tsp_debug_err(true, dev, "%s: resume_scanning failed r=%d\n",
-			__func__, rc);
-	}
-
-release_exclusive:
-	rc = cyttsp5_release_exclusive(dev);
-	if (rc < 0)
-		tsp_debug_err(true, dev, "%s: release_exclusive failed r=%d\n",
-			__func__, rc);
-
-	return rc;
-}
-
 static void run_raw_count_read(void *device_data)
 {
 	struct cyttsp5_samsung_factory_data* sfd =
@@ -655,7 +533,42 @@ static void run_raw_count_read(void *device_data)
 
 	set_default_result(sfd);
 
-	rc = panel_scan_and_retrieve(sfd, CY_MUT_RAW, &sfd->raw);
+#ifdef RECAL_FALSELY_CALED_PANEL
+	rc = cyttsp5_panel_scan_and_retrieve(sfd->dev, CY_SELF_RAW, &sfd->raw);
+	if (rc == 0) {
+		tsp_debug_info(true, sfd->dev, "%s: self min:%d,max:%d\n",
+			__func__, sfd->raw.min, sfd->raw.max);
+		if (sfd->raw.min < SPEC_SELF_RAW_MIN || SPEC_SELF_RAW_MAX < sfd->raw.max) {
+			tsp_debug_info(true, sfd->dev, "%s: selfcap wrong\n",
+				__func__);
+#if !defined(CY_TEST_RAW_READ_WITHOUT_CAL)
+			rc = cyttsp5_fw_calibrate(sfd->dev);
+			if (rc < 0)
+				tsp_debug_err(true, sfd->dev, "%s: calibration fail, rc=%d\n",
+				__func__, rc);
+#endif
+		}
+	}
+	rc = cyttsp5_panel_scan_and_retrieve(sfd->dev, CY_MUT_RAW, &sfd->raw);
+	if (rc == 0) {
+		tsp_debug_info(true, sfd->dev, "%s: mutual min:%d,max:%d\n",
+			__func__, sfd->raw.min, sfd->raw.max);
+		if (sfd->raw.min < SPEC_MUT_RAW_MIN || SPEC_MUT_RAW_MAX < sfd->raw.max) {
+			tsp_debug_info(true, sfd->dev, "%s: mutualcap wrong\n",
+				__func__);
+#if !defined(CY_TEST_RAW_READ_WITHOUT_CAL)
+			rc = cyttsp5_fw_calibrate(sfd->dev);
+			if (rc < 0)
+				tsp_debug_err(true, sfd->dev, "%s: calibration fail, rc=%d\n",
+				__func__, rc);
+
+			rc = cyttsp5_panel_scan_and_retrieve(sfd->dev, CY_MUT_RAW, &sfd->raw);
+#endif
+		}
+	}
+#else
+	rc = cyttsp5_panel_scan_and_retrieve(sfd->dev, CY_MUT_RAW, &sfd->raw);
+#endif
 	if (rc == 0) {
 		snprintf(strbuff, sizeof(strbuff), "%d,%d", sfd->raw.min, sfd->raw.max);
 		sfd->factory_cmd_state = FACTORYCMD_OK;
@@ -689,7 +602,7 @@ static void run_difference_read(void *device_data)
 
 	set_default_result(sfd);
 
-	rc = panel_scan_and_retrieve(sfd, CY_MUT_DIFF, &sfd->diff);
+	rc = cyttsp5_panel_scan_and_retrieve(sfd->dev, CY_MUT_DIFF, &sfd->diff);
 	if (rc == 0) {
 		snprintf(strbuff, sizeof(strbuff), "%d,%d", sfd->diff.min, sfd->diff.max);
 		sfd->factory_cmd_state = FACTORYCMD_OK;
@@ -1053,6 +966,41 @@ check_rc:
 }
 
 /************************************************************************
+ * reset and calibrate
+ ************************************************************************/
+static void reset_and_calibrate(void *device_data)
+{
+	struct cyttsp5_samsung_factory_data* sfd =
+		(struct cyttsp5_samsung_factory_data *) device_data;
+	int rc = 0;
+
+	pr_debug("%s: \n", __func__);
+
+	if (!sfd->probe_done) {
+		pr_debug("%s: probe is not done\n", __func__);
+		return;
+	}
+
+	set_default_result(sfd);
+
+	if (sfd->suspended) {
+		tsp_debug_err(true, sfd->dev, "%s: device is suspended\n", __func__);
+		rc = -EIO;
+		goto check_rc;
+	}
+
+	rc = sfd->corecmd->request_restart(sfd->dev);
+	if (rc) {
+		tsp_debug_err(true, sfd->dev, "%s: error on request_restart\n",
+			__func__);
+		goto check_rc;
+	}
+
+check_rc:
+	_check_rc(sfd, rc);
+}
+
+/************************************************************************
  * commands - hover/glove/stylus
  ************************************************************************/
 #define PARAM_ID_TOUCH_MODE	0xD0
@@ -1168,16 +1116,16 @@ static void touch_mode_switch(struct cyttsp5_samsung_factory_data* sfd,
 
 	sfd->touch_mode = get_touch_mode_value(hover, glove);
 
+	if (sfd->suspended) {
+		tsp_debug_err(true, sfd->dev, "%s: device is suspended\n", __func__);
+		goto check_rc;
+	}
+
 	rc = cyttsp5_request_exclusive(sfd->dev, CY_REQUEST_EXCLUSIVE_TIMEOUT_SET_PARAM);
 	if (rc < 0) {
 		tsp_debug_err(true, sfd->dev, "%s: request exclusive failed(%d)\n",
 			__func__, rc);
 		goto check_rc;
-	}
-
-	if (sfd->suspended) {
-		tsp_debug_err(true, sfd->dev, "%s: device is suspended\n", __func__);
-		goto release_exclusive;
 	}
 
 	if (command == CMD_CLEAR_COVER_MODE &&
@@ -1368,6 +1316,11 @@ static void report_rate(void *device_data)
 
 	sfd->report_rate = sfd->factory_cmd_param[0];
 
+	if (sfd->suspended) {
+		tsp_debug_err(true, sfd->dev, "%s: device is suspended\n", __func__);
+		goto check_rc;
+	}
+
 	rc = cyttsp5_request_exclusive(sfd->dev, CY_REQUEST_EXCLUSIVE_TIMEOUT_SET_PARAM);
 	if (rc < 0) {
 		tsp_debug_err(true, sfd->dev, "%s: request exclusive failed(%d)\n",
@@ -1375,14 +1328,8 @@ static void report_rate(void *device_data)
 		goto check_rc;
 	}
 
-	if (sfd->suspended) {
-		tsp_debug_err(true, sfd->dev, "%s: device is suspended\n", __func__);
-		goto release_exclusive;
-	}
-
 	rc = report_rate_set_param(sfd);
 
-release_exclusive:
 	if (cyttsp5_release_exclusive(sfd->dev) < 0)
 		tsp_debug_err(true, sfd->dev, "%s: release_exclusive failed\n",
 			__func__);
@@ -1571,6 +1518,12 @@ static struct attribute_group sec_touch_factory_attr_group = {
  * This function called with startup() finished startup procedure
  * and having exclusive_access
  ************************************************************************/
+#define PARAM_ID_TOUCH_MODE_DEFAULT SCAN_TYPE_FINGER_AND_STYLUS
+#define STYLUS_ENABLE_DEFAULT 0
+#define PARAM_ID_VIEW_COVER_MODE_DEFAULT 0
+#define PARAM_ID_REPORT_RATE_DEFAULT 0
+#define PARAM_ID_SEPERATE_VELOCITY_MODE_DEFAULT 0
+
 int cyttsp5_samsung_factory_startup_attention(struct device *dev)
 {
 	struct cyttsp5_core_data *cd = dev_get_drvdata(dev);
@@ -1590,43 +1543,68 @@ int cyttsp5_samsung_factory_startup_attention(struct device *dev)
 	cyttsp5_mt_glove_enable(sfd->dev,
 		(sfd->touch_mode & SCAN_TYPE_GLOVE) ? 1 : 0);
 
+//-- stylus enable
+	if (sfd->stylus_enable == STYLUS_ENABLE_DEFAULT)
+		tsp_debug_dbg(true, sfd->dev,
+			"%s: stylus_enable %x is default value, bypass setting the mode\n",
+			__func__, sfd->stylus_enable);
+	else
+		cyttsp5_mt_stylus_enable(sfd->dev, sfd->stylus_enable);
+
 //-- touch mode
 	hover = (sfd->touch_mode & SCAN_TYPE_HOVER) ? 1 : 0;
 	glove = (sfd->touch_mode & SCAN_TYPE_GLOVE) ? 1 : 0;
 	if (sfd->stylus_enable)
 		glove = 1;
 	touch_mode = get_touch_mode_value(hover, glove);
-
-	rc = sfd->corecmd->cmd->set_param(sfd->dev, 0,
-		PARAM_ID_TOUCH_MODE, touch_mode);
-	if (rc) {
-		tsp_debug_err(true, sfd->dev, "%s: error on set touch mode rc=%d\n",
-			__func__, rc);
-		goto exit;
+	if (touch_mode == PARAM_ID_TOUCH_MODE_DEFAULT)
+		tsp_debug_dbg(true, sfd->dev,
+			"%s: touch mode %s is default value, bypass set param\n",
+			__func__, get_touch_mode_str(touch_mode));
+	else {
+		rc = sfd->corecmd->cmd->set_param(sfd->dev, 0,
+			PARAM_ID_TOUCH_MODE, touch_mode);
+		if (rc) {
+			tsp_debug_err(true, sfd->dev, "%s: error on set touch mode rc=%d\n",
+				__func__, rc);
+			goto exit;
+		}
+		tsp_debug_dbg(true, sfd->dev, "%s: touch_mode=%s\n", __func__,
+			get_touch_mode_str(touch_mode));
 	}
-	tsp_debug_dbg(true, sfd->dev, "%s: touch_mode=%s\n", __func__,
-		get_touch_mode_str(touch_mode));
 
 //-- view cover mode
-	rc = sfd->corecmd->cmd->set_param(sfd->dev, 0,
-		PARAM_ID_VIEW_COVER_MODE,
-		sfd->view_cover_closed);
-	if (rc) {
-		tsp_debug_err(true, sfd->dev,
-			"%s: error on set_param view cover mode\n", __func__);
-		goto exit;
+	if (sfd->view_cover_closed == PARAM_ID_VIEW_COVER_MODE_DEFAULT)
+		tsp_debug_dbg(true, sfd->dev,
+			"%s: view cover mode %x is default value, bypass set param\n",
+			__func__, sfd->view_cover_closed);
+	else {
+		rc = sfd->corecmd->cmd->set_param(sfd->dev, 0,
+			PARAM_ID_VIEW_COVER_MODE,
+			sfd->view_cover_closed);
+		if (rc) {
+			tsp_debug_err(true, sfd->dev,
+				"%s: error on set_param view cover mode\n", __func__);
+			goto exit;
+		}
+		tsp_debug_info(true, sfd->dev, "%s: view_cover_closed=%d\n",
+			__func__, sfd->view_cover_closed);
 	}
-	tsp_debug_info(true, sfd->dev, "%s: view_cover_closed=%d\n",
-		__func__, sfd->view_cover_closed);
 
 //-- report rate
-	rc = report_rate_set_param(sfd);
-	if (rc) {
-		tsp_debug_err(true, sfd->dev, "%s: error on set report rate rc=%d\n",
-			__func__, rc);
+	if (sfd->report_rate == PARAM_ID_REPORT_RATE_DEFAULT)
+		tsp_debug_dbg(true, sfd->dev,
+			"%s: report_rate %x is default value, bypass set param\n",
+			__func__, sfd->report_rate);
+	else {
+		rc = report_rate_set_param(sfd);
+		if (rc) {
+			tsp_debug_err(true, sfd->dev, "%s: error on set report rate rc=%d\n",
+				__func__, rc);
+		}
+		tsp_debug_info(true, sfd->dev, "%s: report rate=%d\n",
+			__func__, sfd->report_rate);
 	}
-	tsp_debug_info(true, sfd->dev, "%s: report rate=%d\n",
-		__func__, sfd->report_rate);
 
 exit:
 	sfd->suspended = 0;
@@ -1729,7 +1707,7 @@ int cyttsp5_samsung_factory_probe(struct device *dev)
 		MKDEV(SEC_DEV_TOUCH_MAJOR, SEC_DEV_TSP_MINOR), sfd, "tsp");
 	if (IS_ERR(sfd->factory_dev)) {
 		tsp_debug_err(true, sfd->dev, "Failed to create device for the sysfs\n");
-		goto error_device_create;
+		goto error_device_create_factory_dev;
 	}
 	tsp_debug_dbg(false, dev, "%s sfd->factory_dev->devt=%d\n",
 		__func__, sfd->factory_dev->devt);
@@ -1741,6 +1719,12 @@ int cyttsp5_samsung_factory_probe(struct device *dev)
 		goto error_sysfs_create_group;
 	}
 
+	rc = sysfs_create_link(&sfd->factory_dev->kobj,
+		&cd->md.input->dev.kobj, "input");
+	if (rc < 0) {
+		tsp_debug_err(true, sfd->dev, "Failed to create symbolic link\n");
+	}
+
 	sfd->sysfs_nodes_created = true;
 
 	rc = sfd->corecmd->cmd->get_param(sfd->dev, 1,
@@ -1748,19 +1732,23 @@ int cyttsp5_samsung_factory_probe(struct device *dev)
 	if (rc) {
 		tsp_debug_err(true, dev, "%s: get_param failed r=%d\n",
 			__func__, rc);
-		sfd->touch_mode = SCAN_TYPE_FINGER_AND_STYLUS;
+		sfd->touch_mode = PARAM_ID_TOUCH_MODE_DEFAULT;
 	}
 	tsp_debug_dbg(true, sfd->dev, "%s: touch_mode=%s\n", __func__,
 		get_touch_mode_str(sfd->touch_mode));
 
-	sfd->report_rate = 0;
+	sfd->stylus_enable = STYLUS_ENABLE_DEFAULT;
+	sfd->view_cover_closed = PARAM_ID_VIEW_COVER_MODE_DEFAULT;
+	sfd->report_rate = PARAM_ID_REPORT_RATE_DEFAULT;
+	sfd->is_inputmethod = PARAM_ID_SEPERATE_VELOCITY_MODE_DEFAULT;
+
 	sfd->probe_done = 1;
 	tsp_debug_dbg(true, sfd->dev, "%s: success. rc=%d\n", __func__, rc);
 	return 0;
 
 error_sysfs_create_group:
 	device_destroy(sec_class, sfd->factory_dev->devt);
-error_device_create:
+error_device_create_factory_dev:
 	kfree(sfd->mutual_idac.buf);
 error_alloc_idac_buf:
 	kfree(sfd->diff.buf);
@@ -1782,6 +1770,7 @@ int cyttsp5_samsung_factory_release(struct device *dev)
 		tsp_debug_dbg(false, dev, "%s sfd->factory_dev->devt=%d\n",
 			__func__, sfd->factory_dev->devt);
 		device_destroy(sec_class, sfd->factory_dev->devt);
+
 		kfree(sfd->mutual_idac.buf);
 		kfree(sfd->diff.buf);
 		kfree(sfd->raw.buf);

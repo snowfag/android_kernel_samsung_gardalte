@@ -650,6 +650,9 @@ static int netlink_bind(struct socket *sock, struct sockaddr *addr,
 	struct sockaddr_nl *nladdr = (struct sockaddr_nl *)addr;
 	int err;
 
+	if (addr_len < sizeof(struct sockaddr_nl))
+		return -EINVAL;
+
 	if (nladdr->nl_family != AF_NETLINK)
 		return -EINVAL;
 
@@ -1443,8 +1446,6 @@ static int netlink_recvmsg(struct kiocb *kiocb, struct socket *sock,
 	}
 #endif
 
-	msg->msg_namelen = 0;
-
 	copied = data_skb->len;
 	if (len < copied) {
 		msg->msg_flags |= MSG_TRUNC;
@@ -1542,11 +1543,11 @@ netlink_kernel_create(struct net *net, int unit, unsigned int groups,
 	if (input)
 		nlk_sk(sk)->netlink_rcv = input;
 
-	if (netlink_insert(sk, net, 0))
-		goto out_sock_release;
-
 	nlk = nlk_sk(sk);
 	nlk->flags |= NETLINK_KERNEL_SOCKET;
+
+	if (netlink_insert(sk, net, 0))
+		goto out_sock_release;
 
 	netlink_table_grab();
 	if (!nl_table[unit].registered) {
@@ -1694,6 +1695,7 @@ static int netlink_dump(struct sock *sk)
 	struct netlink_callback *cb;
 	struct sk_buff *skb = NULL;
 	struct nlmsghdr *nlh;
+	struct module *module;
 	int len, err = -ENOBUFS;
 	int alloc_size;
 
@@ -1739,9 +1741,10 @@ static int netlink_dump(struct sock *sk)
 	if (cb->done)
 		cb->done(cb);
 	nlk->cb = NULL;
+	module = cb->module;
 	mutex_unlock(nlk->cb_mutex);
 
-	module_put(cb->module);
+	module_put(module);
 	netlink_destroy_callback(cb);
 	return 0;
 

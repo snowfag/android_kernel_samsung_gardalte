@@ -125,9 +125,9 @@ int pwm_enable(struct pwm_device *pwm)
 	spin_lock_irqsave(&pwm_spinlock, flags);
 
 	if (soc_is_s3c24xx()) {
-	tcon = __raw_readl(S3C2410_TCON);
-	tcon |= pwm_tcon_start(pwm);
-	__raw_writel(tcon, S3C2410_TCON);
+		tcon = __raw_readl(S3C2410_TCON);
+		tcon |= pwm_tcon_start(pwm);
+		__raw_writel(tcon, S3C2410_TCON);
 	} else {
 		tcon = __raw_readl(S3C2410_TCON);
 		if (!(tcon & pwm_tcon_start(pwm))) {
@@ -168,9 +168,9 @@ void pwm_disable(struct pwm_device *pwm)
 	spin_lock_irqsave(&pwm_spinlock, flags);
 
 	if (soc_is_s3c24xx()) {
-	tcon = __raw_readl(S3C2410_TCON);
-	tcon &= ~pwm_tcon_start(pwm);
-	__raw_writel(tcon, S3C2410_TCON);
+		tcon = __raw_readl(S3C2410_TCON);
+		tcon &= ~pwm_tcon_start(pwm);
+		__raw_writel(tcon, S3C2410_TCON);
 	} else {
 		tcon = __raw_readl(S3C2410_TCON);
 		tcon &= ~pwm_tcon_autoreload(pwm);
@@ -232,12 +232,12 @@ int pwm_config(struct pwm_device *pwm, int duty_ns, int period_ns)
 	/* Check to see if we are changing the clock rate of the PWM */
 
 	if (pwm->period_ns != period_ns && pwm_is_tdiv(pwm)) {
-			tin_rate = pwm_calc_tin(pwm, period);
-			clk_set_rate(pwm->clk_div, tin_rate);
+		tin_rate = pwm_calc_tin(pwm, period);
+		clk_set_rate(pwm->clk_div, tin_rate);
 
 		pwm_dbg(pwm, "tin_rate=%lu\n", tin_rate);
 	} else {
-			tin_rate = clk_get_rate(pwm->clk);
+		tin_rate = clk_get_rate(pwm->clk);
 	}
 
 	if (tin_rate == 0) {
@@ -247,7 +247,7 @@ int pwm_config(struct pwm_device *pwm, int duty_ns, int period_ns)
 
 	/* Note, counters count down */
 
-		tin_ns = NS_IN_HZ / tin_rate;
+	tin_ns = NS_IN_HZ / tin_rate;
 
 	tcnt = DIV_ROUND_CLOSEST(period_ns, tin_ns);
 	tcmp = DIV_ROUND_CLOSEST(duty_ns, tin_ns);
@@ -296,13 +296,13 @@ int pwm_config(struct pwm_device *pwm, int duty_ns, int period_ns)
 	__raw_writel(tcnt, S3C2410_TCNTB(pwm->pwm_id));
 
 	if (soc_is_s3c24xx()) {
-	tcon = __raw_readl(S3C2410_TCON);
-	tcon |= pwm_tcon_manulupdate(pwm);
-	tcon |= pwm_tcon_autoreload(pwm);
-	__raw_writel(tcon, S3C2410_TCON);
+		tcon = __raw_readl(S3C2410_TCON);
+		tcon |= pwm_tcon_manulupdate(pwm);
+		tcon |= pwm_tcon_autoreload(pwm);
+		__raw_writel(tcon, S3C2410_TCON);
 
-	tcon &= ~pwm_tcon_manulupdate(pwm);
-	__raw_writel(tcon, S3C2410_TCON);
+		tcon &= ~pwm_tcon_manulupdate(pwm);
+		__raw_writel(tcon, S3C2410_TCON);
 	} else {
 		tcon = __raw_readl(S3C2410_TCON);
 		if (pwm->running == 1 &&

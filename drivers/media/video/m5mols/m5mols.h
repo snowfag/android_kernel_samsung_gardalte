@@ -98,8 +98,8 @@ enum m5mols_res_type {
 struct m5mols_resolution {
 	u8			value;
 	enum m5mols_res_type	type;
-	u16 width;
-	u16 height;
+	u16			width;
+	u16			height;
 };
 
 struct m5mols_format {
@@ -116,22 +116,22 @@ struct m5mols_control {
 };
 
 struct m5mols_exif {
-	u32 exposure_time;
-	u32 shutter_speed;
-	u32 aperture;
-	u32 brightness;
-	u32 exposure_bias;
-	u16 iso_speed;
-	u16 flash;
+	u32	exposure_time;
+	u32	shutter_speed;
+	u32	aperture;
+	u32	brightness;
+	u32	exposure_bias;
+	u16	iso_speed;
+	u16	flash;
 	u16	sdr;		/* subject(object) distance range */
 	u16	qval;		/* This is not written precisely in datasheet. */
 };
 
 struct m5mols_capture {
-	struct m5mols_exif exif;
-	u32 main;
-	u32 thumb;
-	u32 total;
+	struct m5mols_exif		exif;
+	u32				main;
+	u32				thumb;
+	u32				total;
 };
 
 struct m5mols_version {
@@ -144,27 +144,27 @@ struct m5mols_version {
 };
 
 struct m5mols_info {
-	struct v4l2_subdev sd;
+	struct v4l2_subdev		sd;
 	struct media_pad pad;
 	int res_type;
 	u8 resolution;
 	struct v4l2_mbus_framefmt	fmt[M5MOLS_RES_MAX];
 	struct v4l2_fract		tpf;
 
-	struct v4l2_ctrl_handler handle;
+	struct v4l2_ctrl_handler	handle;
 	struct {
 		/* support only AE of the Monitor Mode in this version */
-	struct v4l2_ctrl *autoexposure;
-	struct v4l2_ctrl *exposure;
+		struct v4l2_ctrl	*autoexposure;
+		struct v4l2_ctrl	*exposure;
 		bool			is_ae_lock;
 	};
 	struct v4l2_ctrl		*autofocus;
 	bool				is_focus;
-	struct v4l2_ctrl *autowb;
+	struct v4l2_ctrl		*autowb;
 	bool				is_awb_lock;
-	struct v4l2_ctrl *colorfx;
-	struct v4l2_ctrl *saturation;
-	struct v4l2_ctrl *zoom;
+	struct v4l2_ctrl		*colorfx;
+	struct v4l2_ctrl		*saturation;
+	struct v4l2_ctrl		*zoom;
 	struct v4l2_ctrl		*jpeg_size;
 	struct v4l2_ctrl		*encoded_size;
 

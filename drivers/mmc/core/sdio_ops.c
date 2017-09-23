@@ -172,8 +172,8 @@ int mmc_io_rw_extended(struct mmc_card *card, int write, unsigned fn,
 			left_size = left_size - seg_size;
 		}
 	} else {
-	data.sg = &sg;
-	data.sg_len = 1;
+		data.sg = &sg;
+		data.sg_len = 1;
 
 		sg_init_one(&sg, buf, left_size);
 	}

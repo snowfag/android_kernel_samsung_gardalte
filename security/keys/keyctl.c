@@ -260,7 +260,8 @@ error:
  * Create and join an anonymous session keyring or join a named session
  * keyring, creating it if necessary.  A named session keyring must have Search
  * permission for it to be joined.  Session keyrings without this permit will
- * be skipped over.
+ * be skipped over.  It is not permitted for userspace to create or join
+ * keyrings whose name begin with a dot.
  *
  * If successful, the ID of the joined session keyring will be returned.
  */
@@ -277,12 +278,16 @@ long keyctl_join_session_keyring(const char __user *_name)
 			ret = PTR_ERR(name);
 			goto error;
 		}
+
+		ret = -EPERM;
+		if (name[0] == '.')
+			goto error_name;
 	}
 
 	/* join the session */
 	ret = join_session_keyring(name);
+error_name:
 	kfree(name);
-
 error:
 	return ret;
 }
@@ -371,6 +376,37 @@ long keyctl_revoke_key(key_serial_t id)
 
 	key_ref_put(key_ref);
 error:
+	return ret;
+}
+
+/*
+ * Invalidate a key.
+ *
+ * The key must be grant the caller Invalidate permission for this to work.
+ * The key and any links to the key will be automatically garbage collected
+ * immediately.
+ *
+ * If successful, 0 is returned.
+ */
+long keyctl_invalidate_key(key_serial_t id)
+{
+	key_ref_t key_ref;
+	long ret;
+
+	kenter("%d", id);
+
+	key_ref = lookup_user_key(id, 0, KEY_SEARCH);
+	if (IS_ERR(key_ref)) {
+		ret = PTR_ERR(key_ref);
+		goto error;
+	}
+
+	key_invalidate(key_ref_to_ptr(key_ref));
+	ret = 0;
+
+	key_ref_put(key_ref);
+error:
+	kleave(" = %ld", ret);
 	return ret;
 }
 
@@ -702,16 +738,16 @@ long keyctl_read_key(key_serial_t keyid, char __user *buffer, size_t buflen)
 
 	/* the key is probably readable - now try to read it */
 can_read_key:
-	ret = key_validate(key);
-	if (ret == 0) {
-		ret = -EOPNOTSUPP;
-		if (key->type->read) {
-			/* read the data with the semaphore held (since we
-			 * might sleep) */
-			down_read(&key->sem);
+	ret = -EOPNOTSUPP;
+	if (key->type->read) {
+		/* Read the data with the semaphore held (since we might sleep)
+		 * to protect against the key being updated or revoked.
+		 */
+		down_read(&key->sem);
+		ret = key_validate(key);
+		if (ret == 0)
 			ret = key->type->read(key, buffer, buflen);
-			up_read(&key->sem);
-		}
+		up_read(&key->sem);
 	}
 
 error2:
@@ -1621,6 +1657,9 @@ SYSCALL_DEFINE5(keyctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			(const struct iovec __user *) arg3,
 			(unsigned) arg4,
 			(key_serial_t) arg5);
+
+	case KEYCTL_INVALIDATE:
+		return keyctl_invalidate_key((key_serial_t) arg2);
 
 	default:
 		return -EOPNOTSUPP;

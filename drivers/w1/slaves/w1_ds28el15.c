@@ -105,6 +105,7 @@ static char special_values[2];
 static char rom_no[8];
 
 int verification = -1, id = 2, color;
+char g_sn[14];
 #ifdef CONFIG_W1_CF
 int cf_node = -1;
 #endif	/* CONFIG_W1_CF */
@@ -1922,6 +1923,67 @@ static int w1_ds28el15_get_buffer(struct w1_slave *sl, uchar *rdbuf, int retry_l
 	return ret;
 }
 
+static const int sn_cdigit[19] = {
+        0x0e, 0x0d, 0x1f, 0x0b, 0x1c,
+        0x12, 0x0f, 0x1e, 0x0a, 0x13,
+        0x14, 0x15, 0x19, 0x16, 0x17,
+        0x20, 0x1b, 0x1d, 0x11};
+
+static bool w1_ds28el15_check_digit(uchar *sn)
+{
+	int i, tmp1 = 0, tmp2 = 0;
+	int cdigit = sn[3];
+
+	for (i = 4 ; i < 10 ; i++)
+		tmp1 += sn[i];
+
+/* Debugging log, need to remove */
+	tmp1 += sn[4] * 5;
+	tmp2 = (tmp1 * sn[9] * sn[13]) % 19;
+
+	tmp1 = (sn[10] + sn[12]) * 3 + (sn[11] + sn[13]) * 6 + 14;
+	pr_info("%s: check digit %x\n", __func__, sn_cdigit[((tmp1 + tmp2) % 19)]);
+
+	if (cdigit == sn_cdigit[((tmp1 + tmp2) % 19)])
+		return true;
+	else
+		return false;
+}
+
+static uchar w1_ds28el15_char_convert(uchar c)
+{
+	char ctable[36] = {
+	'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+	'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K',
+	'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W',
+	'X', 'Y', 'Z', 'I', 'O', 'U'};
+
+	return ctable[c];
+}
+
+static void w1_ds28el15_slave_sn(uchar *rdbuf)
+{
+	int i;
+	u8 sn[15];
+
+/* To restrict debugging log */
+	sn[14] = 0;
+
+	if (w1_ds28el15_check_digit(&rdbuf[4])) {
+		for (i = 0 ; i < 14 ; i++)
+			sn[i] = w1_ds28el15_char_convert(rdbuf[i + 4]);
+
+		pr_info("%s: %s\n", __func__, sn);
+		for (i = 0 ; i < 14 ; i++)
+			g_sn[i] = sn[13 - i];
+	} else {
+/* We will not convert here, because the check digit was wrong */
+/* But, NOW below for the test. Keep the every string in sysfs */
+		pr_info("%s: sn is not good %s\n", __func__, sn);
+	}
+
+}
+
 static void w1_ds28el15_update_slave_info(struct w1_slave *sl)
 {
 	u8 rdbuf[32];
@@ -1958,6 +2020,8 @@ static void w1_ds28el15_update_slave_info(struct w1_slave *sl)
 
 	pr_info("%s Read ID(%d) & Color(%d) & Verification State(%d)\n",
 		__func__, id, color, verification);
+
+	w1_ds28el15_slave_sn(&rdbuf[0]);
 }
 
 static int w1_ds28el15_add_slave(struct w1_slave *sl)

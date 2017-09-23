@@ -188,7 +188,7 @@ static bool default_power_down_ok(struct dev_pm_domain *pd)
 		if (constraint_ns < 0) {
 			constraint_ns = dev_pm_qos_read_value(pdd->dev);
 			constraint_ns *= NSEC_PER_USEC;
-	}
+		}
 		if (constraint_ns == 0)
 			continue;
 

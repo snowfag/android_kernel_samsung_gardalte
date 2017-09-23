@@ -113,24 +113,24 @@ static void dma_enqueue(struct snd_pcm_substream *substream)
 		prtd->params->ops->prepare(prtd->params->ch, &dma_info);
 	} else {
 		dma_info.infiniteloop = 0;
-	while (prtd->dma_loaded < limit) {
-		pr_debug("dma_loaded: %d\n", prtd->dma_loaded);
+		while (prtd->dma_loaded < limit) {
+			pr_debug("dma_loaded: %d\n", prtd->dma_loaded);
 
-		if ((pos + dma_info.period) > prtd->dma_end) {
-			dma_info.period  = prtd->dma_end - pos;
-			pr_debug("%s: corrected dma len %ld\n",
-					__func__, dma_info.period);
+			if ((pos + dma_info.period) > prtd->dma_end) {
+				dma_info.period  = prtd->dma_end - pos;
+				pr_debug("%s: corrected dma len %ld\n",
+						__func__, dma_info.period);
+			}
+
+			dma_info.buf = pos;
+			prtd->params->ops->prepare(prtd->params->ch, &dma_info);
+
+			prtd->dma_loaded++;
+			pos += prtd->dma_period;
+			if (pos >= prtd->dma_end)
+				pos = prtd->dma_start;
 		}
-
-		dma_info.buf = pos;
-		prtd->params->ops->prepare(prtd->params->ch, &dma_info);
-
-		prtd->dma_loaded++;
-		pos += prtd->dma_period;
-		if (pos >= prtd->dma_end)
-			pos = prtd->dma_start;
-	}
-	prtd->dma_pos = pos;
+		prtd->dma_pos = pos;
 	}
 }
 
@@ -147,17 +147,17 @@ static void audio_buffdone(void *data)
 	prtd = substream->runtime->private_data;
 
 	if (prtd->state & ST_RUNNING) {
-			snd_pcm_period_elapsed(substream);
+		snd_pcm_period_elapsed(substream);
 
 		if (!samsung_dma_has_circular()) {
 			spin_lock(&prtd->lock);
 
 			prtd->dma_loaded--;
 			if (!samsung_dma_has_infiniteloop())
-			dma_enqueue(substream);
+				dma_enqueue(substream);
 
-		spin_unlock(&prtd->lock);
-	}
+			spin_unlock(&prtd->lock);
+		}
 	}
 }
 
@@ -457,8 +457,8 @@ static void dma_free_dma_buffers(struct snd_pcm *pcm)
 			continue;
 
 		if (buf->addr > EXYNOS_PA_AUDSS)
-		dma_free_writecombine(pcm->card->dev, buf->bytes,
-				      buf->area, buf->addr);
+			dma_free_writecombine(pcm->card->dev, buf->bytes,
+						buf->area, buf->addr);
 		else
 			iounmap(buf->area);
 

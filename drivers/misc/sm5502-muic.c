@@ -44,6 +44,9 @@
 static u8 sm5502_log_cnt;
 static u8 sm5502_log[MAX_LOG][3];
 
+#include <linux/power_supply.h>
+extern int otg_cable_type;
+
 static int sm5502_i2c_read_byte(const struct i2c_client *client, u8 command);
 static int sm5502_i2c_write_byte(const struct i2c_client *client,
 			u8 command, u8 value);
@@ -305,6 +308,40 @@ static int sm5502_set_gpio_doc_switch(int val)
 	return 0;
 }
 #endif /* GPIO_DOC_SWITCH */
+
+static ssize_t sm5502_muic_show_uart_en(struct device *dev,
+						struct device_attribute *attr,
+						char *buf)
+{
+	struct sm5502_muic_data *muic_data = dev_get_drvdata(dev);
+
+	if (!muic_data->is_rustproof) {
+		pr_info("%s:%s UART ENABLE\n", MUIC_DEV_NAME, __func__);
+		return sprintf(buf, "1\n");
+	}
+	pr_info("%s:%s UART DISABLE\n", MUIC_DEV_NAME, __func__);
+	return sprintf(buf, "0\n");
+}
+
+static ssize_t sm5502_muic_set_uart_en(struct device *dev,
+						struct device_attribute *attr,
+						const char *buf, size_t count)
+{
+	struct sm5502_muic_data *muic_data = dev_get_drvdata(dev);
+
+	if (!strncmp(buf, "1", 1)) {
+		muic_data->is_rustproof = false;
+	} else if (!strncmp(buf, "0", 1)) {
+		muic_data->is_rustproof = true;
+	} else {
+		pr_warn("%s:%s invalid value\n", MUIC_DEV_NAME, __func__);
+	}
+
+	pr_info("%s:%s uart_en(%d)\n", MUIC_DEV_NAME, __func__,
+			!muic_data->is_rustproof);
+
+	return count;
+}
 
 static ssize_t sm5502_muic_show_uart_sel(struct device *dev,
 					   struct device_attribute *attr,
@@ -598,6 +635,60 @@ static ssize_t sm5502_muic_set_otg_test(struct device *dev,
 
 	return count;
 }
+
+
+static ssize_t sm5502_muic_show_otg_cable_type(struct device *dev,
+                                           struct device_attribute *attr,
+                                           char *buf)
+{
+    switch (otg_cable_type) {
+    case POWER_SUPPLY_TYPE_BATTERY:
+        return sprintf(buf, "BATTERY\n");
+    case POWER_SUPPLY_TYPE_OTG:
+        return sprintf(buf, "OTG\n");
+    case POWER_SUPPLY_TYPE_USB:
+        return sprintf(buf, "USB\n");
+    default:
+        return sprintf(buf, "UNKNOWN\n");
+    }
+}
+
+static int detach_otg_usb(struct sm5502_muic_data *muic_data);
+static int attach_otg_usb(struct sm5502_muic_data *muic_data,
+            enum muic_attached_dev new_dev);
+
+static ssize_t sm5502_muic_set_otg_cable_type(struct device *dev,
+                struct device_attribute *attr,
+                const char *buf, size_t count)
+{
+    struct sm5502_muic_data *muic_data = dev_get_drvdata(dev);
+        
+    int new_cable_type;
+    if (!strncasecmp(buf, "BATTERY", 7)) {
+        new_cable_type = POWER_SUPPLY_TYPE_BATTERY;
+    } else if (!strncasecmp(buf, "OTG", 3)) {
+        new_cable_type = POWER_SUPPLY_TYPE_OTG;
+    } else if (!strncasecmp(buf, "USB", 3)) {
+        new_cable_type = POWER_SUPPLY_TYPE_USB;
+    } else {
+        pr_warn("%s: invalid value\n", __func__);
+        new_cable_type = -1;
+    }
+    
+    /* set new cable type and restart USB if OTG gadget is already connected */
+    if (new_cable_type != -1 && new_cable_type != otg_cable_type) {
+        bool connected = (muic_data->attached_dev == ATTACHED_DEV_OTG_MUIC);
+        if (connected) {
+            detach_otg_usb(muic_data);
+        }
+        otg_cable_type = new_cable_type;
+        if (connected) {
+            attach_otg_usb(muic_data, ATTACHED_DEV_OTG_MUIC);
+        }
+    }
+        
+    return count;
+}
 #endif
 
 static ssize_t sm5502_muic_show_attached_dev(struct device *dev,
@@ -634,6 +725,8 @@ static ssize_t sm5502_muic_show_attached_dev(struct device *dev,
 		return sprintf(buf, "DESKDOCK\n");
 	case ATTACHED_DEV_AUDIODOCK_MUIC:
 		return sprintf(buf, "AUDIODOCK\n");
+	case ATTACHED_DEV_PS_CABLE_MUIC:
+		return sprintf(buf, "PS CABLE\n");
 	default:
 		break;
 	}
@@ -697,6 +790,7 @@ static ssize_t sm5502_muic_set_apo_factory(struct device *dev,
 	return count;
 }
 
+static DEVICE_ATTR(uart_en, 0664, sm5502_muic_show_uart_en, sm5502_muic_set_uart_en);
 static DEVICE_ATTR(uart_sel, 0664, sm5502_muic_show_uart_sel,
 		sm5502_muic_set_uart_sel);
 static DEVICE_ATTR(usb_sel, 0664,
@@ -712,6 +806,8 @@ static DEVICE_ATTR(usb_state, 0664, sm5502_muic_show_usb_state, NULL);
 #if defined(CONFIG_USB_HOST_NOTIFY)
 static DEVICE_ATTR(otg_test, 0664,
 		sm5502_muic_show_otg_test, sm5502_muic_set_otg_test);
+static DEVICE_ATTR(otg_cable_type, 0664,
+                sm5502_muic_show_otg_cable_type, sm5502_muic_set_otg_cable_type);
 #endif
 static DEVICE_ATTR(attached_dev, 0664, sm5502_muic_show_attached_dev, NULL);
 static DEVICE_ATTR(audio_path, 0664,
@@ -721,6 +817,7 @@ static DEVICE_ATTR(apo_factory, 0664,
 		sm5502_muic_set_apo_factory);
 
 static struct attribute *sm5502_muic_attributes[] = {
+	&dev_attr_uart_en.attr,
 	&dev_attr_uart_sel.attr,
 	&dev_attr_usb_sel.attr,
 	&dev_attr_adc.attr,
@@ -733,6 +830,7 @@ static struct attribute *sm5502_muic_attributes[] = {
 	&dev_attr_usb_state.attr,
 #if defined(CONFIG_USB_HOST_NOTIFY)
 	&dev_attr_otg_test.attr,
+    &dev_attr_otg_cable_type.attr,
 #endif
 	&dev_attr_attached_dev.attr,
 	&dev_attr_audio_path.attr,
@@ -880,6 +978,12 @@ static int com_to_uart(struct sm5502_muic_data *muic_data)
 	enum sm5502_reg_manual_sw1_value reg_val;
 	int ret = 0;
 
+	if(muic_data->is_rustproof)
+	{
+		pr_info("%s:%s rustproof mode : don't open uart path\n",
+			MUIC_DEV_NAME, __func__);
+		return ret;
+	}
 	reg_val = MANSW1_UART;
 	ret = set_com_sw(muic_data, reg_val);
 	if (ret)
@@ -1256,6 +1360,28 @@ static int set_vbus_interrupt(struct sm5502_muic_data *muic_data, int enable)
 	return ret;
 }
 
+static int attach_ps_cable(struct sm5502_muic_data *muic_data,
+			enum muic_attached_dev new_dev)
+{
+	int ret = 0;
+
+	pr_info("%s:%s new_dev(%d)\n", MUIC_DEV_NAME, __func__, new_dev);
+	com_to_open_with_vbus(muic_data);
+	ret = attach_charger(muic_data, new_dev);
+
+	return ret;
+}
+
+static int detach_ps_cable(struct sm5502_muic_data *muic_data)
+{
+	int ret = 0;
+
+	pr_info("%s:%s\n", MUIC_DEV_NAME, __func__);
+	ret = detach_charger(muic_data);
+
+	return ret;
+}
+
 static int attach_deskdock(struct sm5502_muic_data *muic_data,
 			enum muic_attached_dev new_dev, u8 vbvolt)
 {
@@ -1602,6 +1728,17 @@ static void sm5502_muic_handle_attach(struct sm5502_muic_data *muic_data,
 			ret = detach_deskdock(muic_data);
 		}
 		break;
+	case ATTACHED_DEV_PS_CABLE_MUIC:
+		if (new_dev != muic_data->attached_dev) {
+			pr_warn("%s:%s new(%d)!=attached(%d), assume detach\n",
+					MUIC_DEV_NAME, __func__, new_dev,
+					muic_data->attached_dev);
+			ret = detach_ps_cable(muic_data);
+		}
+		break;
+	case ATTACHED_DEV_UNKNOWN_VB_MUIC:
+		ret = detach_charger(muic_data);
+		break;
 	default:
 		break;
 	}
@@ -1637,6 +1774,13 @@ static void sm5502_muic_handle_attach(struct sm5502_muic_data *muic_data,
 		break;
 	case ATTACHED_DEV_DESKDOCK_MUIC:
 		ret = attach_deskdock(muic_data, new_dev, vbvolt);
+		break;
+	case ATTACHED_DEV_PS_CABLE_MUIC:
+		ret = attach_ps_cable(muic_data, new_dev);
+		break;
+	case ATTACHED_DEV_UNKNOWN_VB_MUIC:
+		com_to_open_with_vbus(muic_data);
+		ret = attach_charger(muic_data, new_dev);
 		break;
 	default:
 		pr_warn("%s:%s unsupported dev=%d, adc=0x%x, vbus=%c\n",
@@ -1680,10 +1824,13 @@ static void sm5502_muic_handle_detach(struct sm5502_muic_data *muic_data)
 	case ATTACHED_DEV_AUDIODOCK_MUIC:
 		ret = detach_audiodock(muic_data);
 		break;
+	case ATTACHED_DEV_PS_CABLE_MUIC:
+		ret = detach_ps_cable(muic_data);
+		break;
 	case ATTACHED_DEV_NONE_MUIC:
 		pr_info("%s:%s duplicated(NONE)\n", MUIC_DEV_NAME, __func__);
 		break;
-	case ATTACHED_DEV_UNKNOWN_MUIC:
+	case ATTACHED_DEV_UNKNOWN_VB_MUIC:
 		pr_info("%s:%s UNKNOWN\n", MUIC_DEV_NAME, __func__);
 		ret = detach_charger(muic_data);
 		muic_data->attached_dev = ATTACHED_DEV_NONE_MUIC;
@@ -1865,6 +2012,13 @@ static void sm5502_muic_detect_dev(struct sm5502_muic_data *muic_data)
 		new_dev = ATTACHED_DEV_AUDIODOCK_MUIC;
 		pr_info("%s : ADC AUDIODOCK DETECTED\n", MUIC_DEV_NAME);
 		break;
+	case ADC_PS_CABLE:
+#ifdef CONFIG_MUIC_SM5502_SUPPORT_PS_CABLE
+		intr = MUIC_INTR_ATTACH;
+#endif
+		new_dev = ATTACHED_DEV_PS_CABLE_MUIC;
+		pr_info("%s : PS_CABLE DETECTED\n", MUIC_DEV_NAME);
+		break;
 	case ADC_OPEN:
 		/* sometimes muic fails to catch JIG_UART_OFF detaching */
 		/* double check with ADC */
@@ -1881,8 +2035,8 @@ static void sm5502_muic_detect_dev(struct sm5502_muic_data *muic_data)
 		if(vbvolt)
 		{
 			intr = MUIC_INTR_ATTACH;
-			new_dev = ATTACHED_DEV_TA_MUIC;
-			pr_info("%s : UNDEFIEND VB DETECTED\n", MUIC_DEV_NAME);
+			new_dev = ATTACHED_DEV_UNKNOWN_VB_MUIC;
+			pr_info("%s : UNDEFINED VB DETECTED\n", MUIC_DEV_NAME);
 		}
 		else
 			intr = MUIC_INTR_DETACH;
@@ -1912,7 +2066,7 @@ static int sm5502_muic_reg_init(struct sm5502_muic_data *muic_data)
 	ret = sm5502_i2c_write_byte(i2c, SM5502_MUIC_REG_INTMASK2,
 			REG_INTMASK2_VALUE);
 	if (ret < 0)
-		pr_err("%s: err mask interrupt1(%d)\n", __func__, ret);
+		pr_err("%s: err mask interrupt2(%d)\n", __func__, ret);
 
 #ifdef CONFIG_MUIC_SM5502_ENABLE_AUTOSW
 	/* set AUTO SW mode */
@@ -1961,7 +2115,7 @@ static irqreturn_t sm5502_muic_irq_thread(int irq, void *data)
 		goto skip_detect_dev;
 	}
 
-	if(intr1 & 0x1)
+	if(intr1 & INT_ATTACH_MASK)
 	{
 		int intr_tmp;
 		intr_tmp = sm5502_i2c_read_byte(i2c, SM5502_MUIC_REG_INT1);
@@ -1995,7 +2149,9 @@ static irqreturn_t sm5502_muic_irq_thread(int irq, void *data)
 			/* MUIC Interrupt On */
 			set_int_mask(muic_data, false);
 		}
-		goto skip_detect_dev;
+
+		if((intr1 & INT_ATTACH_MASK) == 0)
+			goto skip_detect_dev;
 	}
 
 	/* device detection */
@@ -2211,6 +2367,20 @@ static int sm5502_muic_probe(struct i2c_client *i2c,
 		goto fail;
 	}
 
+	ret = sm5502_i2c_read_byte(muic_data->i2c, SM5502_MUIC_REG_MANSW1);
+	if (ret < 0)
+		pr_err("%s: err mansw1 (%d)\n", __func__, ret);
+
+	/* RUSTPROOF : disable UART connection if MANSW1 
+		from BL is OPEN_RUSTPROOF */
+	if (ret == MANSW1_OPEN_RUSTPROOF)
+	{
+		muic_data->is_rustproof = true;
+		com_to_open_with_vbus(muic_data);
+	}
+	else
+		muic_data->is_rustproof = false;
+
 	if (muic_data->switch_data->init_cb)
 		muic_data->switch_data->init_cb();
 
@@ -2222,7 +2392,7 @@ static int sm5502_muic_probe(struct i2c_client *i2c,
 
 	/* initial cable detection */
 	INIT_DELAYED_WORK(&muic_data->init_work, sm5502_muic_init_detect);
-	schedule_delayed_work(&muic_data->init_work, msecs_to_jiffies(3000));
+	schedule_delayed_work(&muic_data->init_work, msecs_to_jiffies(1000));
 
 	INIT_DELAYED_WORK(&muic_data->usb_work, sm5502_muic_usb_detect);
 	schedule_delayed_work(&muic_data->usb_work, msecs_to_jiffies(17000));

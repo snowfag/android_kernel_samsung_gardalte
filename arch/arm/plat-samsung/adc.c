@@ -96,8 +96,8 @@ static inline void s3c_adc_convert(struct adc_device *adc)
 
 	if (cpu != TYPE_ADCV5) {
 		con = readl(adc->regs + S3C2410_ADCCON);
-	con |= S3C2410_ADCCON_ENABLE_START;
-	writel(con, adc->regs + S3C2410_ADCCON);
+		con |= S3C2410_ADCCON_ENABLE_START;
+		writel(con, adc->regs + S3C2410_ADCCON);
 	} else {
 		con = readl(adc->regs + SAMSUNG_ADC2_CON1);
 		con |= SAMSUNG_ADC2_CON1_STC_EN;
@@ -116,24 +116,24 @@ static inline void s3c_adc_select(struct adc_device *adc,
 	if (cpu != TYPE_ADCV5) {
 		con = readl(adc->regs + S3C2410_ADCCON);
 
-	if (cpu == TYPE_ADCV1 || cpu == TYPE_ADCV2)
-		con &= ~S3C2410_ADCCON_MUXMASK;
-	con &= ~S3C2410_ADCCON_STDBM;
-	con &= ~S3C2410_ADCCON_STARTMASK;
+		if (cpu == TYPE_ADCV1 || cpu == TYPE_ADCV2)
+			con &= ~S3C2410_ADCCON_MUXMASK;
+		con &= ~S3C2410_ADCCON_STDBM;
+		con &= ~S3C2410_ADCCON_STARTMASK;
 		con |=  S3C2410_ADCCON_PRSCEN;
 
-	if (!client->is_ts) {
+		if (!client->is_ts) {
 			if (cpu == TYPE_ADCV3 || cpu == TYPE_ADCV4)
 				writel(client->channel & 0xf,
 				       adc->regs + S5P_ADCMUX);
-		else if (cpu == TYPE_ADCV11 || cpu == TYPE_ADCV12)
-			writel(client->channel & 0xf,
-						adc->regs + S3C2443_ADCMUX);
-		else
-			con |= S3C2410_ADCCON_SELMUX(client->channel);
-	}
+			else if (cpu == TYPE_ADCV11 || cpu == TYPE_ADCV12)
+				writel(client->channel & 0xf,
+				       adc->regs + S3C2443_ADCMUX);
+			else
+				con |= S3C2410_ADCCON_SELMUX(client->channel);
+		}
 
-	writel(con, adc->regs + S3C2410_ADCCON);
+		writel(con, adc->regs + S3C2410_ADCCON);
 	} else {
 		con = readl(adc->regs + SAMSUNG_ADC2_CON2);
 		con &= ~SAMSUNG_ADC2_CON2_ACH_MASK;
@@ -156,10 +156,10 @@ static void s3c_adc_dbgshow(struct adc_device *adc)
 			readl(adc->regs + S3C2410_ADCCON),
 			readl(adc->regs + S3C2410_ADCDLY));
 	} else {
-	adc_dbg(adc, "CON=%08x, TSC=%08x, DLY=%08x\n",
-		readl(adc->regs + S3C2410_ADCCON),
-		readl(adc->regs + S3C2410_ADCTSC),
-		readl(adc->regs + S3C2410_ADCDLY));
+		adc_dbg(adc, "CON=%08x, TSC=%08x, DLY=%08x\n",
+			readl(adc->regs + S3C2410_ADCCON),
+			readl(adc->regs + S3C2410_ADCTSC),
+			readl(adc->regs + S3C2410_ADCDLY));
 	}
 }
 
@@ -413,8 +413,8 @@ static irqreturn_t s3c_adc_irq(int irq, void *pw)
 		data0 = readl(adc->regs + SAMSUNG_ADC2_DAT);
 		adc_dbg(adc, "read %d: 0x%04x\n", client->nr_samples, data0);
 	} else {
-	data0 = readl(adc->regs + S3C2410_ADCDAT0);
-	data1 = readl(adc->regs + S3C2410_ADCDAT1);
+		data0 = readl(adc->regs + S3C2410_ADCDAT0);
+		data1 = readl(adc->regs + S3C2410_ADCDAT1);
 		adc_dbg(adc, "read %d: 0x%04x, 0x%04x\n", client->nr_samples,
 			data0, data1);
 	}
@@ -447,7 +447,7 @@ static irqreturn_t s3c_adc_irq(int irq, void *pw)
 	spin_unlock(&adc->lock);
 
 exit:
-		/* Clear ADC interrupt */
+	/* Clear ADC interrupt */
 	if (cpu == TYPE_ADCV2 || cpu == TYPE_ADCV3 || cpu == TYPE_ADCV4)
 		writel(0, adc->regs + S3C64XX_ADCCLRINT);
 	else if (cpu == TYPE_ADCV5)
@@ -628,7 +628,7 @@ static int s3c_adc_probe(struct platform_device *pdev)
 	iounmap(adc->regs);
  err_reg:
 	if (adc->vdd)
-	regulator_put(adc->vdd);
+		regulator_put(adc->vdd);
 	kfree(adc);
 	return ret;
 }
@@ -640,7 +640,7 @@ static int __devexit s3c_adc_remove(struct platform_device *pdev)
 	free_irq(adc->irq, adc);
 	iounmap(adc->regs);
 	if (adc->vdd)
-	regulator_put(adc->vdd);
+		regulator_put(adc->vdd);
 
 	clk_put(adc->clk);
 	kfree(adc);

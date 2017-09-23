@@ -964,7 +964,7 @@ static int exynos5_usb_phy30_tune(struct platform_device *pdev)
 		/* TODO: Host mode */
 
 	} else {
-	return -EINVAL;
+		return -EINVAL;
 	}
 
 	return 0;
@@ -1124,7 +1124,7 @@ static int s5p_usb_otg_phy_tune(struct s3c_hsotg_plat *pdata, int def_mode)
 	u32 phytune;
 
 	if (!pdata)
-	return -EINVAL;
+		return -EINVAL;
 
 	pr_debug("usb: %s read original tune\n", __func__);
 	phytune = readl(EXYNOS5_PHY_OTG_TUNE);

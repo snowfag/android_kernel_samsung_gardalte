@@ -218,7 +218,7 @@ static int set_aif2_mute_status(struct snd_kcontrol *kcontrol,
 			switch_mode_text[aif2_digital_mute]);
 
 	if (aif2_digital_mute)
-		msleep(100);
+		msleep(50);
 
 	return 0;
 }

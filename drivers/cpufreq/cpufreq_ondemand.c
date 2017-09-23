@@ -848,7 +848,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		 * Condition 1: current freq is under 1.2GHz, apply step level to 1.2GHz
 		 * Condition 2: current freq is same or over 1.2GHz, increase to max freq.
 		 */
-	if (max_load_freq > dbs_tuners_ins.up_threshold * policy->cur) {
+		if (max_load_freq > dbs_tuners_ins.up_threshold * policy->cur) {
 			dbs_freq_increase(policy, policy->cur < dbs_tuners_ins.up_step_level_b ?
 					dbs_tuners_ins.up_step_level_b : policy->max);
 
@@ -856,7 +856,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		}
 	} else {
 		if (max_load_freq > dbs_tuners_ins.up_threshold_h * policy->cur) {
-		/* If switching to max speed, apply sampling_down_factor */
+			/* If switching to max speed, apply sampling_down_factor */
 			this_dbs_info->rate_mult =
 				dbs_tuners_ins.sampling_down_factor;
 			dbs_freq_increase(policy, dbs_tuners_ins.up_conservative_mode ?
@@ -915,30 +915,30 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		 * If current freq is same or under 800MHz, and load freq is smaller than
 		 * 40(by 60-20), decrease freq.
 		 */
-	if (max_load_freq <
+		if (max_load_freq <
 		    (dbs_tuners_ins.up_threshold_l - dbs_tuners_ins.down_differ_l) *
-	     policy->cur) {
-		unsigned int freq_next;
-		freq_next = max_load_freq /
+		     policy->cur) {
+			unsigned int freq_next;
+			freq_next = max_load_freq /
 					(dbs_tuners_ins.up_threshold_l -
 					 dbs_tuners_ins.down_differ_l);
 
-		/* No longer fully busy, reset rate_mult */
-		this_dbs_info->rate_mult = 1;
+                        /* No longer fully busy, reset rate_mult */
+			this_dbs_info->rate_mult = 1;
 
-		if (freq_next < policy->min)
-			freq_next = policy->min;
+			if (freq_next < policy->min)
+				freq_next = policy->min;
 
-		if (!dbs_tuners_ins.powersave_bias) {
-			__cpufreq_driver_target(policy, freq_next,
+			if (!dbs_tuners_ins.powersave_bias) {
+				__cpufreq_driver_target(policy, freq_next,
+						CPUFREQ_RELATION_L);
+			} else {
+				int freq = powersave_bias_target(policy, freq_next,
+						CPUFREQ_RELATION_L);
+				__cpufreq_driver_target(policy, freq,
 					CPUFREQ_RELATION_L);
-		} else {
-			int freq = powersave_bias_target(policy, freq_next,
-					CPUFREQ_RELATION_L);
-			__cpufreq_driver_target(policy, freq,
-				CPUFREQ_RELATION_L);
+			}
 		}
-	}
 	}
 
 exit:

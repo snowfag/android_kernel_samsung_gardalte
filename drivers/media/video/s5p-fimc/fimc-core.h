@@ -54,6 +54,8 @@
 #define TILED_ALIGN_HEIGHT	32
 #define DEFAULT_CSC_EQ		1
 #define DEFAULT_CSC_RANGE	1
+
+#define FIMC_PERF		1
 /* indices to the clocks array */
 enum {
 	CLK_BUS,
@@ -423,7 +425,7 @@ struct fimc_variant {
  */
 struct fimc_drvdata {
 	struct fimc_variant *variant[FIMC_MAX_DEVS];
-	int		num_entities;
+	int num_entities;
 	unsigned long lclk_frequency;
 };
 
@@ -475,6 +477,7 @@ struct fimc_dev {
 	unsigned long long		start_time;
 	unsigned long long		end_time;
 #endif
+	struct timer_list		op_timer;
 };
 
 /**
@@ -715,11 +718,11 @@ int fimc_register_driver(void);
 void fimc_unregister_driver(void);
 int fimc_runtime_resume(struct device *dev);
 int fimc_runtime_suspend(struct device *dev);
+void s5p_fimc_dump_registers(struct fimc_dev *fimc);
 
 /* -----------------------------------------------------*/
 /* fimc-m2m.c */
 void fimc_m2m_job_finish(struct fimc_ctx *ctx, int vb_state);
-
 /* -----------------------------------------------------*/
 /* fimc-capture.c					*/
 int fimc_initialize_capture_subdev(struct fimc_dev *fimc);

@@ -34,8 +34,8 @@ void s3c_i2c7_cfg_gpio(struct platform_device *dev)
 				      S3C_GPIO_SFN(3), S3C_GPIO_PULL_UP);
 
 	else	/* EXYNOS4210, EXYNOS4212, EXYNOS4412 and EXYNOS4415 */
-	s3c_gpio_cfgall_range(EXYNOS4_GPD0(2), 2,
-			      S3C_GPIO_SFN(3), S3C_GPIO_PULL_UP);
+		s3c_gpio_cfgall_range(EXYNOS4_GPD0(2), 2,
+				      S3C_GPIO_SFN(3), S3C_GPIO_PULL_UP);
 }
 
 void s3c_i2c7_cfg_mux()

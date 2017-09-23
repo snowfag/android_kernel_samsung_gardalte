@@ -191,16 +191,16 @@ static void s3c24xx_serial_stop_tx(struct uart_port *port)
 
 	if (!((ourport->cfg->is_aud_uart)
 		&& (state->pm_state == UART_PORT_SUSPEND))) {
-	if (tx_enabled(port)) {
-		if (s3c24xx_serial_has_interrupt_mask(port))
-			__set_bit(S3C64XX_UINTM_TXD,
-				portaddrl(port, S3C64XX_UINTM));
-		else
-			disable_irq_nosync(ourport->tx_irq);
-		tx_enabled(port) = 0;
-		if (port->flags & UPF_CONS_FLOW)
-			s3c24xx_serial_rx_enable(port);
-	}
+		if (tx_enabled(port)) {
+			if (s3c24xx_serial_has_interrupt_mask(port))
+				__set_bit(S3C64XX_UINTM_TXD,
+					portaddrl(port, S3C64XX_UINTM));
+			else
+				disable_irq_nosync(ourport->tx_irq);
+			tx_enabled(port) = 0;
+			if (port->flags & UPF_CONS_FLOW)
+				s3c24xx_serial_rx_enable(port);
+		}
 #ifdef CONFIG_SERIAL_SAMSUNG_DMA
 		uart_dma->ops->stop(uart_dma->tx.ch);
 #endif
@@ -214,17 +214,17 @@ static void s3c24xx_serial_start_tx(struct uart_port *port)
 
 	if (!((ourport->cfg->is_aud_uart)
 		&& (state->pm_state == UART_PORT_SUSPEND))) {
-	if (!tx_enabled(port)) {
-		if (port->flags & UPF_CONS_FLOW)
-			s3c24xx_serial_rx_disable(port);
+		if (!tx_enabled(port)) {
+			if (port->flags & UPF_CONS_FLOW)
+				s3c24xx_serial_rx_disable(port);
 
-		if (s3c24xx_serial_has_interrupt_mask(port))
-			__clear_bit(S3C64XX_UINTM_TXD,
-				portaddrl(port, S3C64XX_UINTM));
-		else
-			enable_irq(ourport->tx_irq);
-		tx_enabled(port) = 1;
-	}
+			if (s3c24xx_serial_has_interrupt_mask(port))
+				__clear_bit(S3C64XX_UINTM_TXD,
+					portaddrl(port, S3C64XX_UINTM));
+			else
+				enable_irq(ourport->tx_irq);
+			tx_enabled(port) = 1;
+		}
 	}
 }
 
@@ -239,15 +239,15 @@ static void s3c24xx_serial_stop_rx(struct uart_port *port)
 
 	if (!((ourport->cfg->is_aud_uart)
 		&& (state->pm_state == UART_PORT_SUSPEND))) {
-	if (rx_enabled(port)) {
-		dbg("s3c24xx_serial_stop_rx: port=%p\n", port);
-		if (s3c24xx_serial_has_interrupt_mask(port))
-			__set_bit(S3C64XX_UINTM_RXD,
-				portaddrl(port, S3C64XX_UINTM));
-		else
-			disable_irq_nosync(ourport->rx_irq);
-		rx_enabled(port) = 0;
-	}
+		if (rx_enabled(port)) {
+			dbg("s3c24xx_serial_stop_rx: port=%p\n", port);
+			if (s3c24xx_serial_has_interrupt_mask(port))
+				__set_bit(S3C64XX_UINTM_RXD,
+					portaddrl(port, S3C64XX_UINTM));
+			else
+				disable_irq_nosync(ourport->rx_irq);
+			rx_enabled(port) = 0;
+		}
 #ifdef CONFIG_SERIAL_SAMSUNG_DMA
 		uart_dma->ops->stop(uart_dma->rx.ch);
 
@@ -1054,7 +1054,7 @@ static void s3c24xx_serial_pm(struct uart_port *port, unsigned int level,
 		umcon &= ~(S3C2410_UMCOM_AFC | S3C2410_UMCOM_RTS_LOW);
 		wr_regl(port, S3C2410_UMCON, umcon);
 
-		if (!IS_ERR(ourport->baudclk))
+		if (!IS_ERR(ourport->baudclk) && ourport->baudclk != NULL)
 			clk_disable(ourport->baudclk);
 
 		clk_disable(ourport->clk);
@@ -1065,7 +1065,7 @@ static void s3c24xx_serial_pm(struct uart_port *port, unsigned int level,
 		aud_uart_get_sync(ourport);
 		clk_enable(ourport->clk);
 
-		if (!IS_ERR(ourport->baudclk))
+		if (!IS_ERR(ourport->baudclk) && ourport->baudclk != NULL)
 			clk_enable(ourport->baudclk);
 
 		if (ourport->cfg->is_aud_uart && ourport->cfg->cfg_gpio) {

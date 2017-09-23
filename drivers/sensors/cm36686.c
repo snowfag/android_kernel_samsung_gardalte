@@ -66,7 +66,12 @@
 /* Intelligent Cancelation*/
 #define CM36686_CANCELATION
 #ifdef CM36686_CANCELATION
+#define SUCCESS		1
+#define FAIL		0
+#define ERROR		-1
 #define CANCELATION_FILE_PATH	"/efs/prox_cal"
+#define CAL_SKIP_ADC	4
+#define CAL_FAIL_ADC	14
 #endif
 
 #define PROX_READ_NUM		40
@@ -136,6 +141,7 @@ struct cm36686_data {
 	u16 als_data;
 	u16 white_data;
 	int count_log_time;
+	unsigned int uProxCalResult;
 
 	void (*cm36686_light_vddpower)(bool);
 	void (*cm36686_proxi_vddpower)(bool);
@@ -295,6 +301,44 @@ static ssize_t light_enable_show(struct device *dev,
 }
 
 #ifdef CM36686_CANCELATION
+void set_default_proximity_threshold(struct cm36686_data *data)
+{
+	pr_info("%s: called\n", __func__);
+	if (data->pdata->default_hi_thd) {
+		ps_reg_init_setting[PS_THD_HIGH][CMD] =
+			data->pdata->default_hi_thd;
+	} else
+		ps_reg_init_setting[PS_THD_HIGH][CMD] = DEFUALT_HI_THD;
+
+	if (data->pdata->default_low_thd) {
+		ps_reg_init_setting[PS_THD_LOW][CMD] =
+			data->pdata->default_low_thd;
+	} else
+		ps_reg_init_setting[PS_THD_LOW][CMD] = DEFUALT_LOW_THD;
+}
+
+static int get_proximity_threshold(struct cm36686_data *data)
+{
+	if (ps_reg_init_setting[PS_CANCEL][CMD] <= CAL_SKIP_ADC) {				/* SKIP */
+		ps_reg_init_setting[PS_CANCEL][CMD] = 0;
+		data->uProxCalResult = 2;
+		pr_info("%s: crosstalk <= %d, skip calibration\n", __func__, CAL_SKIP_ADC);
+		return ERROR;
+	} else if (ps_reg_init_setting[PS_CANCEL][CMD] <= CAL_FAIL_ADC) {			/* CANCELATION */
+		ps_reg_init_setting[PS_CANCEL][CMD] = ps_reg_init_setting[PS_CANCEL][CMD];
+		data->uProxCalResult = 1;
+	} else {										/* FAIL */
+		ps_reg_init_setting[PS_CANCEL][CMD] = 0;
+		data->uProxCalResult = 0;
+		pr_info("%s: crosstalk > %d, calibration failed\n", __func__, CAL_FAIL_ADC);
+		return ERROR;
+	}
+
+	pr_info("%s: crosstalk_offset = %u",
+		__func__, ps_reg_init_setting[PS_CANCEL][CMD]);
+	return SUCCESS;
+}
+
 static int proximity_open_cancelation(struct cm36686_data *data)
 {
 	struct file *cancel_filp = NULL;
@@ -361,30 +405,26 @@ static int proximity_store_cancelation(struct device *dev, bool do_calib)
 		ps_reg_init_setting[PS_CANCEL][CMD] = ps_data;
 		mutex_unlock(&cm36686->read_lock);
 
-		if (cm36686->pdata->cancel_hi_thd) {
-			ps_reg_init_setting[PS_THD_HIGH][CMD] =
-				cm36686->pdata->cancel_hi_thd;
-		} else
-			ps_reg_init_setting[PS_THD_HIGH][CMD] = CANCEL_HI_THD;
+		err = get_proximity_threshold(cm36686);
+		if(err != ERROR) {
+			if (cm36686->pdata->cancel_hi_thd) {
+				ps_reg_init_setting[PS_THD_HIGH][CMD] =
+					cm36686->pdata->cancel_hi_thd;
+			} else
+				ps_reg_init_setting[PS_THD_HIGH][CMD] = CANCEL_HI_THD;
 
-		if (cm36686->pdata->cancel_low_thd) {
-			ps_reg_init_setting[PS_THD_LOW][CMD] =
-				cm36686->pdata->cancel_low_thd;
-		} else
-			ps_reg_init_setting[PS_THD_LOW][CMD] = DEFUALT_LOW_THD;
+			if (cm36686->pdata->cancel_low_thd) {
+				ps_reg_init_setting[PS_THD_LOW][CMD] =
+					cm36686->pdata->cancel_low_thd;
+			} else
+				ps_reg_init_setting[PS_THD_LOW][CMD] = DEFUALT_LOW_THD;
+		} else {
+			set_default_proximity_threshold(cm36686);
+		}
+
 	} else { /* reset */
 		ps_reg_init_setting[PS_CANCEL][CMD] = 0;
-		if (cm36686->pdata->default_hi_thd) {
-			ps_reg_init_setting[PS_THD_HIGH][CMD] =
-				cm36686->pdata->default_hi_thd;
-		} else
-			ps_reg_init_setting[PS_THD_HIGH][CMD] = DEFUALT_HI_THD;
-
-		if (cm36686->pdata->default_low_thd) {
-			ps_reg_init_setting[PS_THD_LOW][CMD] =
-				cm36686->pdata->default_low_thd;
-		} else
-			ps_reg_init_setting[PS_THD_LOW][CMD] = DEFUALT_LOW_THD;
+		set_default_proximity_threshold(cm36686);
 	}
 
 	err = cm36686_i2c_write_word(cm36686, REG_PS_CANC,
@@ -467,6 +507,15 @@ static ssize_t proximity_cancel_show(struct device *dev,
 	return sprintf(buf, "%u,%u,%u\n", ps_reg_init_setting[PS_CANCEL][CMD],
 		ps_reg_init_setting[PS_THD_HIGH][CMD],ps_reg_init_setting[PS_THD_LOW][CMD]);
 }
+
+static ssize_t proximity_cancel_pass_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct cm36686_data *cm36686 = dev_get_drvdata(dev);
+
+	pr_info("%s, %u\n", __func__, cm36686->uProxCalResult);
+	return snprintf(buf, PAGE_SIZE, "%u\n", cm36686->uProxCalResult);
+}
 #endif
 
 static ssize_t proximity_enable_store(struct device *dev,
@@ -488,7 +537,6 @@ static ssize_t proximity_enable_store(struct device *dev,
 	mutex_lock(&cm36686->power_lock);
 	pr_info("%s, new_value = %d\n", __func__, new_value);
 	if (new_value && !(cm36686->power_state & PROXIMITY_ENABLED)) {
-		u8 val = 1;
 		int i;
 		int err = 0;
 
@@ -515,10 +563,10 @@ static ssize_t proximity_enable_store(struct device *dev,
 				ps_reg_init_setting[i][CMD]);
 		}
 
-		val = gpio_get_value(cm36686->pdata->irq);
+		/*val = gpio_get_value(cm36686->pdata->irq);*/
 		/* 0 is close, 1 is far */
 		input_report_abs(cm36686->proximity_input_dev,
-			ABS_DISTANCE, val);
+			ABS_DISTANCE, 1);
 		input_sync(cm36686->proximity_input_dev);
 
 		enable_irq(cm36686->irq);
@@ -755,6 +803,7 @@ static ssize_t proximity_thresh_low_store(struct device *dev,
 #ifdef CM36686_CANCELATION
 static DEVICE_ATTR(prox_cal, S_IRUGO | S_IWUSR | S_IWGRP,
 	proximity_cancel_show, proximity_cancel_store);
+static DEVICE_ATTR(prox_offset_pass, S_IRUGO, proximity_cancel_pass_show, NULL);
 #endif
 static DEVICE_ATTR(prox_avg, S_IRUGO | S_IWUSR | S_IWGRP,
 	proximity_avg_show, proximity_avg_store);
@@ -1225,40 +1274,47 @@ static int cm36686_i2c_probe(struct i2c_client *client,
 			dev_attr_prox_cal.attr.name);
 		goto err_proximity_device_create_file3;
 	}
+
+	if (device_create_file(cm36686->proximity_dev,
+		&dev_attr_prox_offset_pass) < 0) {
+		pr_err("%s: could not create device file(%s)!\n", __func__,
+			dev_attr_prox_offset_pass.attr.name);
+		goto err_proximity_device_create_file4;
+	}
 #endif
 	if (device_create_file(cm36686->proximity_dev,
 		&dev_attr_prox_avg) < 0) {
 		pr_err("%s: could not create device file(%s)!\n", __func__,
 			dev_attr_prox_avg.attr.name);
-		goto err_proximity_device_create_file4;
+		goto err_proximity_device_create_file5;
 	}
 
 	if (device_create_file(cm36686->proximity_dev,
 		&dev_attr_thresh_high) < 0) {
 		pr_err("%s: could not create device file(%s)!\n", __func__,
 			dev_attr_thresh_high.attr.name);
-		goto err_proximity_device_create_file5;
+		goto err_proximity_device_create_file6;
 	}
 
 	if (device_create_file(cm36686->proximity_dev,
 		&dev_attr_vendor) < 0) {
 		pr_err("%s: could not create device file(%s)!\n", __func__,
 			dev_attr_vendor.attr.name);
-		goto err_proximity_device_create_file6;
+		goto err_proximity_device_create_file7;
 	}
 
 	if (device_create_file(cm36686->proximity_dev,
 		&dev_attr_name) < 0) {
 		pr_err("%s: could not create device file(%s)!\n", __func__,
 			dev_attr_name.attr.name);
-		goto err_proximity_device_create_file7;
+		goto err_proximity_device_create_file8;
 	}
 
 	if (device_create_file(cm36686->proximity_dev,
 		&dev_attr_thresh_low) < 0) {
 		pr_err("%s: could not create device file(%s)!\n", __func__,
 			dev_attr_thresh_low.attr.name);
-		goto err_proximity_device_create_file8;
+		goto err_proximity_device_create_file9;
 	}
 
 	dev_set_drvdata(cm36686->proximity_dev, cm36686);
@@ -1310,16 +1366,18 @@ err_light_device_create_file1:
 	sensors_classdev_unregister(cm36686->light_dev);
 err_light_device_create:
 	device_remove_file(cm36686->proximity_dev, &dev_attr_thresh_low);
-err_proximity_device_create_file8:
+err_proximity_device_create_file9:
 	device_remove_file(cm36686->proximity_dev, &dev_attr_name);
-err_proximity_device_create_file7:
+err_proximity_device_create_file8:
 	device_remove_file(cm36686->proximity_dev, &dev_attr_vendor);
-err_proximity_device_create_file6:
+err_proximity_device_create_file7:
 	device_remove_file(cm36686->proximity_dev, &dev_attr_thresh_high);
-err_proximity_device_create_file5:
+err_proximity_device_create_file6:
 	device_remove_file(cm36686->proximity_dev, &dev_attr_prox_avg);
-err_proximity_device_create_file4:
+err_proximity_device_create_file5:
 #ifdef CM36686_CANCELATION
+	device_remove_file(cm36686->proximity_dev, &dev_attr_prox_offset_pass);
+err_proximity_device_create_file4:
 	device_remove_file(cm36686->proximity_dev, &dev_attr_prox_cal);
 err_proximity_device_create_file3:
 #endif
@@ -1413,6 +1471,7 @@ static int cm36686_i2c_remove(struct i2c_client *client)
 	device_remove_file(cm36686->proximity_dev, &dev_attr_prox_avg);
 #ifdef CM36686_CANCELATION
 	device_remove_file(cm36686->proximity_dev, &dev_attr_prox_cal);
+	device_remove_file(cm36686->proximity_dev, &dev_attr_prox_offset_pass);
 #endif
 	device_remove_file(cm36686->proximity_dev, &attr_prox_raw);
 	device_remove_file(cm36686->proximity_dev, &dev_attr_state);

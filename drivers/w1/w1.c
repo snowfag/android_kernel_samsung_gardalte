@@ -58,6 +58,7 @@ int w1_max_slave_ttl = 1;
 static struct w1_master *master_dev = NULL;
 extern int w1_ds28el15_verifymac(struct w1_slave *sl);
 extern int verification, id, color;
+extern char g_sn[14];
 #ifdef CONFIG_W1_CF
 extern int cf_node;
 #endif	/* CONFIG_W1_CF */
@@ -446,18 +447,30 @@ static int w1_atoreg_num(struct device *dev, const char *buf, size_t count,
 /* Searches the slaves in the w1_master and returns a pointer or NULL.
  * Note: must hold the mutex
  */
+extern bool w1_is_suspended;
+
 static struct w1_slave *w1_slave_search_device(struct w1_master *dev,
 	struct w1_reg_num *rn)
 {
 	struct w1_slave *sl = NULL;
 	list_for_each_entry(sl, &dev->slist, w1_slave_entry) {
-#if !defined(CONFIG_W1_FAST_CHECK)
-		if (sl->reg_num.family == rn->family &&
-				sl->reg_num.id == rn->id &&
-				sl->reg_num.crc == rn->crc)
-#endif	/* CONFIG_W1_FAST_CHECK */
+		if (w1_is_suspended) {
+			pr_info("%s: is_suspended true\n", __func__);
+			w1_is_suspended = false;
+
+			if (sl->reg_num.family == rn->family &&
+					sl->reg_num.id == rn->id &&
+					sl->reg_num.crc == rn->crc) {
+				return sl;
+			} else {
+				w1_slave_detach(sl);
+				return NULL;
+			}
+		} else {
+			pr_info("%s: is_suspended false\n", __func__);
 			return sl;
 		}
+	}
 	return NULL;
 }
 
@@ -529,13 +542,7 @@ static ssize_t w1_master_attribute_show_verify_mac(struct device *dev, struct de
 {
 	int result = -1;
 
-#if !defined(CONFIG_W1_WORKQUEUE) && !defined(CONFIG_W1_KTHREAD)
 	struct w1_master *md = dev_to_w1_master(dev);
-	struct list_head *ent, *n;
-	struct w1_slave *sl = NULL;
-#endif
-
-	pr_info("COVER ACT 1 %s\n", __func__);
 
 #if defined(CONFIG_W1_WORKQUEUE)
 	cancel_delayed_work_sync(&w1_gdev->w1_dwork);
@@ -543,22 +550,14 @@ static ssize_t w1_master_attribute_show_verify_mac(struct device *dev, struct de
 	schedule_delayed_work(&w1_gdev->w1_dwork, 0);
 
 	msleep(10);
+#endif /* W1_WORKQUEUE */
 
-	result = verification;
-#elif defined(CONFIG_W1_KTHREAD)
-	result = verification;
-#else
-	w1_master_search();
-
-	list_for_each_safe(ent, n, &md->slist)
-		sl = list_entry(ent, struct w1_slave, w1_slave_entry);
-
-	/* verify mac */
-	if (sl)
-		result = w1_ds28el15_verifymac(sl);
+	if (md->slave_count > 0)
+		result = 0;
 	else
-		pr_info("%s : sysfs call fail\n", __func__);
-#endif
+		result = -1;
+
+	pr_info("COVER ACT 1 %s %d\n", __func__, result);
 
 	return sprintf(buf, "%d\n", result);
 }
@@ -573,14 +572,24 @@ static ssize_t w1_master_attribute_show_cf(struct device *dev, struct device_att
 
 static ssize_t w1_master_attribute_show_check_id(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	pr_info("COVER ACT 2 %s\n", __func__);
+	pr_info("COVER ACT 2 %s %d\n", __func__, id);
 	return sprintf(buf, "%d\n", id);
 }
 
 static ssize_t w1_master_attribute_show_check_color(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	pr_info("COVER ACT 2 %s\n", __func__);
+	pr_info("COVER ACT 2 %s %d\n", __func__, color);
 	return sprintf(buf, "%d\n", color);
+}
+
+static ssize_t w1_master_attribute_show_check_sn(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	pr_info("COVER ACT 3 %s\n", __func__);
+
+	if (g_sn[0])
+		return snprintf(buf, 15, "%s\n", g_sn);
+	else
+		return snprintf(buf, 1, "%s", "");
 }
 /* need to add */
 
@@ -612,6 +621,7 @@ static W1_MASTER_ATTR_RO(cf, S_IRUGO);
 #endif	/* CONFIG_W1_CF */
 static W1_MASTER_ATTR_RO(check_id, S_IRUGO);
 static W1_MASTER_ATTR_RO(check_color, S_IRUGO);
+static W1_MASTER_ATTR_RO(check_sn, S_IRUGO);
 
 static struct attribute *w1_master_default_attrs[] = {
 	&w1_master_attribute_name.attr,
@@ -631,6 +641,7 @@ static struct attribute *w1_master_default_attrs[] = {
 #endif	/* CONFIG_W1_CF */
 	&w1_master_attribute_check_id.attr,
 	&w1_master_attribute_check_color.attr,
+	&w1_master_attribute_check_sn.attr,
 	NULL
 };
 
@@ -786,7 +797,6 @@ static int w1_attach_slave_device(struct w1_master *dev, struct w1_reg_num *rn)
 			 __func__);
 		return -ENOMEM;
 	}
-
 
 	sl->owner = THIS_MODULE;
 	sl->master = dev;

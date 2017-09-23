@@ -127,7 +127,6 @@ static void fimc_device_run(void *priv)
 	fimc = ctx->fimc_dev;
 	spin_lock_irqsave(&fimc->slock, flags);
 
-	set_bit(ST_M2M_PEND, &fimc->state);
 	sf = &ctx->s_frame;
 	df = &ctx->d_frame;
 
@@ -160,6 +159,7 @@ static void fimc_device_run(void *priv)
 	}
 
 	if (ctx->state & FIMC_PARAMS) {
+		fimc_hw_reset(fimc);
 		fimc_set_yuv_order(ctx);
 		fimc_hw_set_input_path(ctx);
 		fimc_hw_set_in_dma(ctx);
@@ -187,6 +187,9 @@ static void fimc_device_run(void *priv)
 		       FIMC_SRC_FMT | FIMC_DST_FMT);
 	fimc_hw_activate_input_dma(fimc, true);
 
+	set_bit(ST_M2M_PEND, &fimc->state);
+	fimc->op_timer.expires = (jiffies + 2 * HZ);
+	add_timer(&fimc->op_timer);
 dma_unlock:
 	spin_unlock_irqrestore(&fimc->slock, flags);
 }
@@ -954,6 +957,28 @@ static struct v4l2_m2m_ops m2m_ops = {
 	.job_abort	= fimc_job_abort,
 };
 
+void fimc_op_timer_handler(unsigned long arg)
+{
+	struct fimc_dev *fimc = (struct fimc_dev *)arg;
+	struct fimc_ctx *ctx = v4l2_m2m_get_curr_priv(fimc->m2m.m2m_dev);
+
+#ifdef FIMC_PERF
+	fimc->end_time = sched_clock();
+	pr_err("OP-TIME: %llu", fimc->end_time - fimc->start_time);
+#endif
+	s5p_fimc_dump_registers(fimc);
+
+	clear_bit(ST_M2M_PEND, &fimc->state);
+
+	fimc_m2m_job_finish(ctx, VB2_BUF_STATE_ERROR);
+
+	pr_err("fimc[%d] interrupt hasn't been triggered", fimc->id);
+	pr_err("erro ctx: %p, ctx->state: 0x%x", ctx, ctx->state);
+
+	BUG();
+}
+
+
 int fimc_register_m2m_device(struct fimc_dev *fimc,
 			     struct v4l2_device *v4l2_dev)
 {
@@ -988,6 +1013,8 @@ int fimc_register_m2m_device(struct fimc_dev *fimc,
 	if (ret)
 		goto err_vd;
 
+	setup_timer(&fimc->op_timer, fimc_op_timer_handler,
+			(unsigned long)fimc);
 	v4l2_info(v4l2_dev, "Registered %s as /dev/%s\n",
 		  vfd->name, video_device_node_name(vfd));
 	return 0;

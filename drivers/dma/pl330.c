@@ -1527,22 +1527,22 @@ static int _setup_req(unsigned dry_run, struct pl330_thread *thrd,
 
 	x = pxs->r->x;
 	if (!pxs->r->infiniteloop) {
-	do {
-		/* Error if xfer length is not aligned at burst size */
+		do {
+			/* Error if xfer length is not aligned at burst size */
 			if (x->bytes % (BRST_SIZE(pxs->ccr) *
 					BRST_LEN(pxs->ccr)))
-			return -EINVAL;
+				return -EINVAL;
 
-		pxs->x = x;
-		off += _setup_xfer(dry_run, &buf[off], pxs);
+			pxs->x = x;
+			off += _setup_xfer(dry_run, &buf[off], pxs);
 
-		x = x->next;
-	} while (x);
+			x = x->next;
+		} while (x);
 
-	/* DMASEV peripheral/event */
-	off += _emit_SEV(dry_run, &buf[off], thrd->ev);
-	/* DMAEND */
-	off += _emit_END(dry_run, &buf[off]);
+		/* DMASEV peripheral/event */
+		off += _emit_SEV(dry_run, &buf[off], thrd->ev);
+		/* DMAEND */
+		off += _emit_END(dry_run, &buf[off]);
 	} else {
 		/* Error if xfer length is not aligned at burst size */
 		if (x->bytes % (BRST_SIZE(pxs->ccr) * BRST_LEN(pxs->ccr)))
@@ -1846,10 +1846,10 @@ static int pl330_update(const struct pl330_info *pi)
 				/* Detach the req */
 				thrd->req[active].r = NULL;
 
-			mark_free(thrd, active);
+				mark_free(thrd, active);
 
-			/* Get going again ASAP */
-			_start(thrd);
+				/* Get going again ASAP */
+				_start(thrd);
 			}
 
 			/* For now, just make a list of callbacks to be done */
@@ -2161,9 +2161,9 @@ static int dmac_alloc_resources(struct pl330_dmac *pl330)
 		pl330->mcode_bus = ADMA_MCODE_BASE;
 		pl330->mcode_cpu = ioremap(ADMA_MCODE_BASE, (chans * pi->mcbufsz));
 	} else {
-	pl330->mcode_cpu = dma_alloc_coherent(pi->dev,
-				chans * pi->mcbufsz,
-				&pl330->mcode_bus, GFP_KERNEL);
+		pl330->mcode_cpu = dma_alloc_coherent(pi->dev,
+					chans * pi->mcbufsz,
+					&pl330->mcode_bus, GFP_KERNEL);
 	}
 	if (!pl330->mcode_cpu) {
 		dev_err(pi->dev, "%s:%d Can't allocate memory!\n",
@@ -2180,9 +2180,9 @@ static int dmac_alloc_resources(struct pl330_dmac *pl330)
 			iounmap(pl330->mcode_cpu);
 			pl330->mcode_bus = 0;
 		} else {
-		dma_free_coherent(pi->dev,
-				chans * pi->mcbufsz,
-				pl330->mcode_cpu, pl330->mcode_bus);
+			dma_free_coherent(pi->dev,
+					chans * pi->mcbufsz,
+					pl330->mcode_cpu, pl330->mcode_bus);
 		}
 		return ret;
 	}
@@ -2415,7 +2415,7 @@ static inline void fill_queue(struct dma_pl330_chan *pch)
 		if (!ret) {
 			desc->status = BUSY;
 			if (_queue_full(pch->pl330_chid))
-			break;
+				break;
 		} else if (ret == -EAGAIN) {
 			/* QFull or DMAC Dying */
 			break;
@@ -2588,6 +2588,8 @@ static void pl330_free_chan_resources(struct dma_chan *chan)
 {
 	struct dma_pl330_chan *pch = to_pchan(chan);
 	unsigned long flags;
+
+	tasklet_kill(&pch->task);
 
 	spin_lock_irqsave(&pch->lock, flags);
 

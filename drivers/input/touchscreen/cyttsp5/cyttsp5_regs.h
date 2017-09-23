@@ -154,7 +154,7 @@
 #define CY_REQUEST_EXCLUSIVE_TIMEOUT 500
 #define CY_REQUEST_EXCLUSIVE_TIMEOUT_GET_PARAM 1000
 #define CY_REQUEST_EXCLUSIVE_TIMEOUT_SET_PARAM 2000
-#define CY_WATCHDOG_TIMEOUT         1000
+#define CY_WATCHDOG_TIMEOUT         3000
 #define CY_WATCHDOG_REQUEST_EXCLUSIVE_TIMEOUT 6000
 #define CY_WATCHDOG_RETRY 3
 #define CY_CORE_RESET_AND_WAIT_TIMEOUT		500
@@ -870,6 +870,7 @@ struct cyttsp5_samsung_factory_data {
 
 	bool probe_done;
 	bool suspended;
+	bool is_inputmethod;
 };
 #endif
 
@@ -1009,6 +1010,7 @@ struct cyttsp5_core_data {
 	struct tsp_callbacks callbacks;
 	bool ta_status;
 	bool probe_done;
+	struct cyttsp5_sfd_panel_scan_data panel_scan_data;
 };
 
 struct cyttsp5_bus_ops {
@@ -1160,6 +1162,7 @@ static inline int cyttsp5_devtree_clean_pdata(struct device *adap_dev)
 int cyttsp5_probe(const struct cyttsp5_bus_ops *ops, struct device *dev,
 		u16 irq, size_t xfer_buf_size);
 int cyttsp5_release(struct cyttsp5_core_data *cd);
+int cyttsp5_fw_calibrate(struct device *dev);
 
 struct cyttsp5_core_commands *cyttsp5_get_commands(void);
 struct cyttsp5_core_data *cyttsp5_get_core_data(char *id);
@@ -1236,4 +1239,25 @@ extern const struct dev_pm_ops cyttsp5_pm_ops;
 int cyttsp5_core_suspend(struct device *dev);
 int cyttsp5_core_resume(struct device *dev);
 
+
+#define CY_MAX_NODE_NUM 900 /* 30 * 30 */
+#define CY_MAX_INPUT_HEADER_SIZE 12
+
+#define CY_RETRY_OR_EXIT(retry_cnt, retry_label, exit_label) \
+do { \
+	if (retry_cnt) \
+		goto retry_label; \
+	goto exit_label; \
+} while (0)
+
+#define CY_CALIBRATION_RETRY 3
+#define CY_CALIBRATION_RETRY_DELAY 1000 // in ms
+
+int cyttsp5_panel_scan_and_retrieve(struct device *dev,
+	u8 data_id, struct cyttsp5_sfd_panel_scan_data *panel_scan_data);
+#if 0
+#define CY_TEST_COUNT_MORE_THAN_S16
+#define CY_TEST_RECAL_ONE_SELF_NODE_32767
+#define CY_TEST_RAW_READ_WITHOUT_CAL
+#endif
 #endif /* _CYTTSP5_REGS_H */

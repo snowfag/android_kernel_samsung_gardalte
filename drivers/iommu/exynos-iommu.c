@@ -469,6 +469,8 @@ static void __exynos_sysmmu_set_pbuf_ver31(struct sysmmu_drvdata *drvdata,
 		prefbuf[0].size = 1;
 	__sysmmu_set_prefbuf(drvdata->sfrbases[idx] + pbuf_offset[1],
 				prefbuf[0].base, prefbuf[0].size, 0);
+
+	__sysmmu_tlb_invalidate(drvdata->sfrbases[idx]);
 }
 
 static void __exynos_sysmmu_set_pbuf_ver32(struct sysmmu_drvdata *drvdata,
@@ -513,6 +515,8 @@ static void __exynos_sysmmu_set_pbuf_ver32(struct sysmmu_drvdata *drvdata,
 	}
 
 	__raw_writel(cfg, drvdata->sfrbases[idx] + REG_MMU_CFG);
+
+	__sysmmu_tlb_invalidate(drvdata->sfrbases[idx]);
 }
 
 static unsigned int find_lmm_preset(unsigned int num_pb, unsigned int num_bufs)
@@ -547,6 +551,19 @@ static unsigned int find_num_pb(unsigned int num_pb, unsigned int lmm)
 	BUG_ON(num_pb == 0);
 	return num_pb;
 }
+
+static void __sysmmu_init_pb(void __iomem *sfrbase, unsigned int num_pb)
+{
+	unsigned int i = 0;
+
+	for (i = 0; i < num_pb; i++) {
+		__raw_writel(i, sfrbase + REG_PB_INDICATE);
+		__raw_writel(0, sfrbase + REG_PB_CFG);
+	}
+
+	__raw_writel(0x1, sfrbase + REG_MMU_FLUSH);
+}
+
 static void __exynos_sysmmu_set_pbuf_ver33(struct sysmmu_drvdata *drvdata,
 					   int idx)
 {
@@ -561,6 +578,10 @@ static void __exynos_sysmmu_set_pbuf_ver33(struct sysmmu_drvdata *drvdata,
 			__func__, drvdata->dbgname);
 		return;
 	}
+
+	__sysmmu_init_pb(drvdata->sfrbases[idx],
+		find_num_pb(num_pb,
+			__raw_readl(drvdata->sfrbases[idx] + REG_PB_LMM)));
 
 	num_bufs = __prepare_prefetch_buffers(drvdata, idx, prefbuf, num_pb);
 	if ((num_bufs == 0) || (num_bufs > 6)) {
@@ -918,7 +939,7 @@ static enum exynos_sysmmu_inttype find_fault_information(
 			struct sysmmu_drvdata *drvdata, int idx,
 			unsigned long *fault_addr)
 {
-	unsigned int maj, min;
+	unsigned int maj, min = 0;
 	unsigned long base = 0;
 	unsigned int itype;
 	unsigned int info = 0;
@@ -980,9 +1001,6 @@ static irqreturn_t exynos_sysmmu_irq(int irq, void *dev_id)
 	unsigned long addr = -1;
 	const char *mmuname = NULL;
 	int i, ret = -ENOSYS;
-
-	if (!is_sysmmu(drvdata->sysmmu))
-		return IRQ_NONE;
 
 	if (drvdata->master)
 		owner = drvdata->master->archdata.iommu;
@@ -2154,7 +2172,7 @@ static int debug_sysmmu_list_show(struct seq_file *s, void *unused)
 {
 	struct sysmmu_drvdata *drvdata = s->private;
 	struct platform_device *pdev = to_platform_device(drvdata->sysmmu);
-	int idx, maj, min, ret;
+	int idx, maj, min = 0, ret;
 
 	seq_printf(s, "SysMMU Name | Ver | SFR Base\n");
 
@@ -2298,12 +2316,12 @@ static void __init __create_debugfs_entry(struct sysmmu_drvdata *drvdata)
 		dev_err(drvdata->sysmmu,
 			"Failed to create debugfs file 'sysmmu_list'\n");
 
-	if (!debugfs_create_file("next_sibling", 0444, drvdata->debugfs_root,
+	if (!debugfs_create_file("next_sibling", 0x444, drvdata->debugfs_root,
 				drvdata->sysmmu, &debug_next_sibling_fops))
 		dev_err(drvdata->sysmmu,
 			"Failed to create debugfs file 'next_siblings'\n");
 
-	if (!debugfs_create_file("master", 0444, drvdata->debugfs_root,
+	if (!debugfs_create_file("master", 0x444, drvdata->debugfs_root,
 				drvdata->sysmmu, &debug_master_fops))
 		dev_err(drvdata->sysmmu,
 			"Failed to create debugfs file 'next_siblings'\n");

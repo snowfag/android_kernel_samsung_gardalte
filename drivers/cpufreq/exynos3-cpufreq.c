@@ -133,14 +133,9 @@ static unsigned int exynos_get_safe_armvolt(unsigned int old_index, unsigned int
 	 * reguired voltage level
 	 */
 
-	if (exynos_info->need_apll_change != NULL) {
-		if (exynos_info->need_apll_change(old_index, new_index) &&
-			(freq_table[new_index].frequency < exynos_info->mpll_freq_khz) &&
-			(freq_table[old_index].frequency < exynos_info->mpll_freq_khz)) {
-				safe_arm_volt = volt_table[exynos_info->pll_safe_idx];
-			}
-
-	}
+	if ((freq_table[new_index].frequency < exynos_info->mpll_freq_khz) &&
+		(freq_table[old_index].frequency < exynos_info->mpll_freq_khz))
+		safe_arm_volt = volt_table[exynos_info->pll_safe_idx];
 
 	return safe_arm_volt;
 }
@@ -915,7 +910,7 @@ static int __init exynos_cpufreq_init(void)
 	}
 
 	if (exynos_info->boot_cpu_max_qos) {
-		pm_qos_add_request(&boot_min_cpu_qos, PM_QOS_CPU_FREQ_MAX,
+		pm_qos_add_request(&boot_max_cpu_qos, PM_QOS_CPU_FREQ_MAX,
 					max_cpu_qos_const.default_value);
 		pm_qos_update_request_timeout(&boot_max_cpu_qos,
 					exynos_info->boot_cpu_max_qos, 40000 * 1000);

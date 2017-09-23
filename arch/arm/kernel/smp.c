@@ -302,7 +302,7 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	notify_cpu_starting(cpu);
 
 	if (skip_secondary_calibrate())
-	calibrate_delay();
+		calibrate_delay();
 
 	smp_store_cpu_info(cpu);
 

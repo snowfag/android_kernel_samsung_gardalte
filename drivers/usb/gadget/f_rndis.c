@@ -975,9 +975,9 @@ rndis_bind_config_vendor(struct usb_configuration *c, u8 ethaddr[ETH_ALEN],
 		return -EINVAL;
 
 	/* setup RNDIS itself */
-		status = rndis_init();
-		if (status < 0)
-			return status;
+	status = rndis_init();
+	if (status < 0)
+		return status;
 
 	/* maybe allocate device-global string IDs */
 	if (rndis_string_defs[0].id == 0) {

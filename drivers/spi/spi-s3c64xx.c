@@ -230,7 +230,7 @@ static void prepare_dma(struct s3c64xx_spi_dma_data *dma,
 		mode_cfg = readl(regs + S3C64XX_SPI_MODE_CFG);
 		if (mode_cfg & S3C64XX_SPI_MODE_4BURST)
 			config.maxburst = 4;
-	else
+		else
 			config.maxburst = 1;
 
 		config.direction = sdd->rx_dma.direction;
@@ -362,16 +362,16 @@ static inline void enable_cs(struct s3c64xx_spi_driver_data *sdd,
 			/* Deselect the last toggled device */
 			cs = sdd->tgl_spi->controller_data;
 			if (cs->set_level != NULL) {
-			cs->set_level(cs->line,
+				cs->set_level(cs->line,
 					spi->mode & SPI_CS_HIGH ? 0 : 1);
-		}
+			}
 		}
 		sdd->tgl_spi = NULL;
 	}
 
 	cs = spi->controller_data;
 	if (cs->set_level != NULL)
-	cs->set_level(cs->line, spi->mode & SPI_CS_HIGH ? 1 : 0);
+		cs->set_level(cs->line, spi->mode & SPI_CS_HIGH ? 1 : 0);
 
 	if (cs->cs_mode == AUTO_CS_MODE) {
 		/* Set auto chip selection */
@@ -468,7 +468,7 @@ static inline void disable_cs(struct s3c64xx_spi_driver_data *sdd,
 		sdd->tgl_spi = NULL;
 
 	if (cs->set_level != NULL)
-	cs->set_level(cs->line, spi->mode & SPI_CS_HIGH ? 0 : 1);
+		cs->set_level(cs->line, spi->mode & SPI_CS_HIGH ? 0 : 1);
 }
 
 static void s3c64xx_spi_config(struct s3c64xx_spi_driver_data *sdd)
@@ -726,11 +726,11 @@ static int s3c64xx_spi_transfer_one_message(struct spi_master *master,
 			if (xfer->len > fifo_lvl)
 				xfer->len = fifo_lvl;
 		} else {
-		/* Polling method for xfers not bigger than FIFO capacity */
+			/* Polling method for xfers not bigger than FIFO capacity */
 			if (xfer->len <= fifo_lvl)
-			use_dma = 0;
-		else
-			use_dma = 1;
+				use_dma = 0;
+			else
+				use_dma = 1;
 		}
 try_transfer:
 		spin_lock_irqsave(&sdd->lock, flags);
@@ -748,13 +748,13 @@ try_transfer:
 
 			enable_datapath(sdd, spi, xfer, use_dma);
 		} else {
-		enable_datapath(sdd, spi, xfer, use_dma);
+			enable_datapath(sdd, spi, xfer, use_dma);
 
-		/* Slave Select */
-		enable_cs(sdd, spi);
+			/* Slave Select */
+			enable_cs(sdd, spi);
 
-		/* Start the signals */
-		S3C64XX_SPI_ACT(sdd);
+			/* Start the signals */
+			S3C64XX_SPI_ACT(sdd);
 		}
 
 		spin_unlock_irqrestore(&sdd->lock, flags);
@@ -961,25 +961,30 @@ static irqreturn_t s3c64xx_spi_irq(int irq, void *data)
 {
 	struct s3c64xx_spi_driver_data *sdd = data;
 	struct spi_master *spi = sdd->master;
-	unsigned int val;
+	unsigned int val, clr = 0;
 
-	val = readl(sdd->regs + S3C64XX_SPI_PENDING_CLR);
+	val = readl(sdd->regs + S3C64XX_SPI_STATUS);
 
-	val &= S3C64XX_SPI_PND_RX_OVERRUN_CLR |
-		S3C64XX_SPI_PND_RX_UNDERRUN_CLR |
-		S3C64XX_SPI_PND_TX_OVERRUN_CLR |
-		S3C64XX_SPI_PND_TX_UNDERRUN_CLR;
-
-	writel(val, sdd->regs + S3C64XX_SPI_PENDING_CLR);
-
-	if (val & S3C64XX_SPI_PND_RX_OVERRUN_CLR)
+	if (val & S3C64XX_SPI_ST_RX_OVERRUN_ERR) {
+		clr = S3C64XX_SPI_PND_RX_OVERRUN_CLR;
 		dev_err(&spi->dev, "RX overrun\n");
-	if (val & S3C64XX_SPI_PND_RX_UNDERRUN_CLR)
+	}
+	if (val & S3C64XX_SPI_ST_RX_UNDERRUN_ERR) {
+		clr |= S3C64XX_SPI_PND_RX_UNDERRUN_CLR;
 		dev_err(&spi->dev, "RX underrun\n");
-	if (val & S3C64XX_SPI_PND_TX_OVERRUN_CLR)
+	}
+	if (val & S3C64XX_SPI_ST_TX_OVERRUN_ERR) {
+		clr |= S3C64XX_SPI_PND_TX_OVERRUN_CLR;
 		dev_err(&spi->dev, "TX overrun\n");
-	if (val & S3C64XX_SPI_PND_TX_UNDERRUN_CLR)
+	}
+	if (val & S3C64XX_SPI_ST_TX_UNDERRUN_ERR) {
+		clr |= S3C64XX_SPI_PND_TX_UNDERRUN_CLR;
 		dev_err(&spi->dev, "TX underrun\n");
+	}
+
+	/* Clear the pending irq by setting and then clearing it */
+	writel(clr, sdd->regs + S3C64XX_SPI_PENDING_CLR);
+	writel(0, sdd->regs + S3C64XX_SPI_PENDING_CLR);
 
 	return IRQ_HANDLED;
 }
@@ -1003,9 +1008,13 @@ static void s3c64xx_spi_hwinit(struct s3c64xx_spi_driver_data *sdd, int channel)
 	writel(0, regs + S3C64XX_SPI_MODE_CFG);
 	writel(0, regs + S3C64XX_SPI_PACKET_CNT);
 
-	/* Clear any irq pending bits */
-	writel(readl(regs + S3C64XX_SPI_PENDING_CLR),
-				regs + S3C64XX_SPI_PENDING_CLR);
+	/* Clear any irq pending bits, should set and clear the bits */
+	val = S3C64XX_SPI_PND_RX_OVERRUN_CLR |
+		S3C64XX_SPI_PND_RX_UNDERRUN_CLR |
+		S3C64XX_SPI_PND_TX_OVERRUN_CLR |
+		S3C64XX_SPI_PND_TX_UNDERRUN_CLR;
+	writel(val, regs + S3C64XX_SPI_PENDING_CLR);
+	writel(0, regs + S3C64XX_SPI_PENDING_CLR);
 
 	writel(0, regs + S3C64XX_SPI_SWAP_CFG);
 
@@ -1043,19 +1052,19 @@ static int __init s3c64xx_spi_probe(struct platform_device *pdev)
 	/* Check for availability of necessary resource */
 
 	if (sci->dma_mode != PIO_MODE) {
-	dmatx_res = platform_get_resource(pdev, IORESOURCE_DMA, 0);
-	if (dmatx_res == NULL) {
+		dmatx_res = platform_get_resource(pdev, IORESOURCE_DMA, 0);
+		if (dmatx_res == NULL) {
 			dev_err(&pdev->dev,
 					"Unable to get SPI-Tx dma resource\n");
-		return -ENXIO;
-	}
+			return -ENXIO;
+		}
 
-	dmarx_res = platform_get_resource(pdev, IORESOURCE_DMA, 1);
-	if (dmarx_res == NULL) {
+		dmarx_res = platform_get_resource(pdev, IORESOURCE_DMA, 1);
+		if (dmarx_res == NULL) {
 			dev_err(&pdev->dev,
 					"Unable to get SPI-Rx dma resource\n");
-		return -ENXIO;
-	}
+			return -ENXIO;
+		}
 	}
 
 	mem_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -1065,11 +1074,11 @@ static int __init s3c64xx_spi_probe(struct platform_device *pdev)
 	}
 
 	if (pdev->id < 3) {
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
-		dev_warn(&pdev->dev, "Failed to get IRQ: %d\n", irq);
-		return irq;
-	}
+		irq = platform_get_irq(pdev, 0);
+		if (irq < 0) {
+			dev_warn(&pdev->dev, "Failed to get IRQ: %d\n", irq);
+			return irq;
+		}
 	}
 
 	master = spi_alloc_master(&pdev->dev,
@@ -1088,10 +1097,10 @@ static int __init s3c64xx_spi_probe(struct platform_device *pdev)
 	sdd->sfr_start = mem_res->start;
 
 	if (sci->dma_mode != PIO_MODE) {
-	sdd->tx_dma.dmach = dmatx_res->start;
-	sdd->tx_dma.direction = DMA_MEM_TO_DEV;
-	sdd->rx_dma.dmach = dmarx_res->start;
-	sdd->rx_dma.direction = DMA_DEV_TO_MEM;
+		sdd->tx_dma.dmach = dmatx_res->start;
+		sdd->tx_dma.direction = DMA_MEM_TO_DEV;
+		sdd->rx_dma.dmach = dmarx_res->start;
+		sdd->rx_dma.direction = DMA_DEV_TO_MEM;
 	}
 
 	sdd->cur_bpw = 8;
@@ -1156,10 +1165,10 @@ static int __init s3c64xx_spi_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&sdd->queue);
 
 	if (pdev->id < 3) {
-	ret = request_irq(irq, s3c64xx_spi_irq, 0, "spi-s3c64xx", sdd);
-	if (ret != 0) {
-		dev_err(&pdev->dev, "Failed to request IRQ %d: %d\n",
-			irq, ret);
+		ret = request_irq(irq, s3c64xx_spi_irq, 0, "spi-s3c64xx", sdd);
+		if (ret != 0) {
+			dev_err(&pdev->dev, "Failed to request IRQ %d: %d\n",
+				irq, ret);
 			goto err6;
 		}
 	}
@@ -1248,9 +1257,9 @@ static int s3c64xx_spi_suspend(struct device *dev)
 #ifndef CONFIG_PM_RUNTIME
 
 	if (pdev->id < 3) {
-	/* Disable the clock */
-	clk_disable(sdd->src_clk);
-	clk_disable(sdd->clk);
+		/* Disable the clock */
+		clk_disable(sdd->src_clk);
+		clk_disable(sdd->clk);
 	}
 #endif
 
@@ -1269,11 +1278,11 @@ static int s3c64xx_spi_resume(struct device *dev)
 	sci->cfg_gpio(pdev);
 
 	if (pdev->id < 3) {
-	/* Enable the clock */
-	clk_enable(sdd->clk);
+		/* Enable the clock */
+		clk_enable(sdd->clk);
 		clk_enable(sdd->src_clk);
 
-	s3c64xx_spi_hwinit(sdd, pdev->id);
+		s3c64xx_spi_hwinit(sdd, pdev->id);
 
 #ifdef CONFIG_PM_RUNTIME
 		/* Disable the clock */

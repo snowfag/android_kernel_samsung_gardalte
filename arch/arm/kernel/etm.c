@@ -97,7 +97,7 @@ static int etm_setup_address_range(struct tracectx *t, int id, int n,
 			n += 8;
 		etm_writel(t, id, flags | BIT(n), ETMR_VIEWDATACTRL3);
 	} else {
-	flags = exclude ? ETMTE_INCLEXCL : 0;
+		flags = exclude ? ETMTE_INCLEXCL : 0;
 		etm_writel(t, id, flags | (1 << n), ETMR_TRACEENCTRL);
 	}
 
@@ -482,7 +482,7 @@ static int __devinit etb_probe(struct amba_device *dev, const struct amba_id *id
 	if (IS_ERR(t->emu_clk))
 		dev_dbg(&dev->dev, "Failed to obtain emu_src_ck.\n");
 	else
-	clk_enable(t->emu_clk);
+		clk_enable(t->emu_clk);
 
 	dev_dbg(&dev->dev, "ETB AMBA driver initialized.\n");
 
@@ -512,8 +512,8 @@ static int etb_remove(struct amba_device *dev)
 	t->etb_regs = NULL;
 
 	if (!IS_ERR(t->emu_clk)) {
-	clk_disable(t->emu_clk);
-	clk_put(t->emu_clk);
+		clk_disable(t->emu_clk);
+		clk_put(t->emu_clk);
 	}
 
 	amba_release_regions(dev);
@@ -561,7 +561,7 @@ static ssize_t trace_running_store(struct kobject *kobj,
 	if (!tracer.etb_regs)
 		ret = -ENODEV;
 	else
-	ret = value ? trace_start(&tracer) : trace_stop(&tracer);
+		ret = value ? trace_start(&tracer) : trace_stop(&tracer);
 	mutex_unlock(&tracer.mutex);
 
 	return ret ? : n;
@@ -581,13 +581,13 @@ static ssize_t trace_info_show(struct kobject *kobj,
 
 	mutex_lock(&tracer.mutex);
 	if (tracer.etb_regs) {
-	etb_unlock(&tracer);
-	datalen = etb_getdatalen(&tracer);
-	etb_wa = etb_readl(&tracer, ETBR_WRITEADDR);
-	etb_ra = etb_readl(&tracer, ETBR_READADDR);
-	etb_st = etb_readl(&tracer, ETBR_STATUS);
-	etb_fc = etb_readl(&tracer, ETBR_FORMATTERCTRL);
-	etb_lock(&tracer);
+		etb_unlock(&tracer);
+		datalen = etb_getdatalen(&tracer);
+		etb_wa = etb_readl(&tracer, ETBR_WRITEADDR);
+		etb_ra = etb_readl(&tracer, ETBR_READADDR);
+		etb_st = etb_readl(&tracer, ETBR_STATUS);
+		etb_fc = etb_readl(&tracer, ETBR_FORMATTERCTRL);
+		etb_lock(&tracer);
 	} else {
 		etb_wa = etb_ra = etb_st = etb_fc = ~0;
 		datalen = -1;
@@ -1015,7 +1015,7 @@ static int etm_remove(struct amba_device *dev)
 	t->etm_regs_count--;
 	if (!t->etm_regs_count) {
 		kfree(t->etm_regs);
-	t->etm_regs = NULL;
+		t->etm_regs = NULL;
 	}
 	mutex_unlock(&t->mutex);
 

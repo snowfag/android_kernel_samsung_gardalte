@@ -116,7 +116,6 @@ int s5p_mfc_alloc_firmware(struct s5p_mfc_dev *dev)
 		return -EIO;
 	}
 
-	if (!dev->num_drm_inst) {
 		s5p_mfc_bitproc_virt =
 				s5p_mfc_mem_vaddr_priv(s5p_mfc_bitproc_buf);
 		mfc_debug(2, "Virtual address for FW: %08lx\n",
@@ -128,7 +127,6 @@ int s5p_mfc_alloc_firmware(struct s5p_mfc_dev *dev)
 			s5p_mfc_bitproc_buf = 0;
 			return -EIO;
 		}
-	}
 
 	dev->port_a = s5p_mfc_bitproc_phys;
 
@@ -209,8 +207,6 @@ int s5p_mfc_load_firmware(struct s5p_mfc_dev *dev)
 					     FIRMWARE_CODE_SIZE,
 					     DMA_TO_DEVICE);
 	*/
-	s5p_mfc_mem_clean_priv(s5p_mfc_bitproc_buf, s5p_mfc_bitproc_virt, 0,
-			fw_blob->size);
 	release_firmware(fw_blob);
 	mfc_debug_leave();
 	return 0;
@@ -378,7 +374,11 @@ int s5p_mfc_init_hw(struct s5p_mfc_dev *dev)
 	/* 0. MFC reset */
 	mfc_debug(2, "MFC reset...\n");
 
-	s5p_mfc_clock_on();
+	ret = s5p_mfc_clock_on();
+	if (ret) {
+		mfc_err("Failed to enable clock before reset(%d)\n", ret);
+		return ret;
+	}
 
 	ret = s5p_mfc_reset(dev);
 	if (ret) {
@@ -558,6 +558,9 @@ int s5p_mfc_wakeup(struct s5p_mfc_dev *dev)
 		mfc_err("no mfc device to run\n");
 		return -EINVAL;
 	}
+
+	/* Set clock source again after wake up */
+	s5p_mfc_set_clock_parent(dev);
 
 	/* 0. MFC reset */
 	mfc_debug(2, "MFC reset...\n");

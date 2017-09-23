@@ -65,7 +65,7 @@ static int mmc_queue_thread(void *d)
 		if ((mq->card->quirks & MMC_QUIRK_MOVINAND_TLC) && (mq->mqrq_prev->req))
 			req = NULL;
 		else
-		req = blk_fetch_request(q);
+			req = blk_fetch_request(q);
 
 		mq->mqrq_cur->req = req;
 		spin_unlock_irq(q->queue_lock);
@@ -508,7 +508,7 @@ unsigned int mmc_queue_map_sg(struct mmc_queue *mq, struct mmc_queue_req *mqrq)
 		if (sg_flag != MMC_PACKED_NONE_SG)
 			return mmc_queue_packed_map_sg(mq, mqrq, mqrq->sg);
 		else
-		return blk_rq_map_sg(mq->queue, mqrq->req, mqrq->sg);
+			return blk_rq_map_sg(mq->queue, mqrq->req, mqrq->sg);
 	}
 
 	BUG_ON(!mqrq->bounce_sg);
@@ -516,7 +516,7 @@ unsigned int mmc_queue_map_sg(struct mmc_queue *mq, struct mmc_queue_req *mqrq)
 	if (sg_flag != MMC_PACKED_NONE_SG)
 		sg_len = mmc_queue_packed_map_sg(mq, mqrq, mqrq->bounce_sg);
 	else
-	sg_len = blk_rq_map_sg(mq->queue, mqrq->req, mqrq->bounce_sg);
+		sg_len = blk_rq_map_sg(mq->queue, mqrq->req, mqrq->bounce_sg);
 
 	mqrq->bounce_sg_len = sg_len;
 

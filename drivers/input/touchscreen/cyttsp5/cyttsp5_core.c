@@ -2387,6 +2387,7 @@ int cyttsp5_fw_calibrate(struct device *dev)
 		return rc;
 	}
 
+	tsp_debug_dbg(false, dev, "%s: suspend scan\n", __func__);
 	rc = cyttsp5_hid_output_suspend_scanning_(cd);
 	if (rc) {
 		tsp_debug_err(true, cd->dev, "%s: error on suspend scanning\n",
@@ -2394,6 +2395,7 @@ int cyttsp5_fw_calibrate(struct device *dev)
 		goto release;
 	}
 
+	tsp_debug_dbg(false, dev, "%s: do calibration\n", __func__);
 	for (mode = 0; mode < 3; mode++) {
 		rc = cyttsp5_hid_output_calibrate_idacs_(cd, mode);
 		if (rc < 0) {
@@ -2403,6 +2405,7 @@ int cyttsp5_fw_calibrate(struct device *dev)
 		}
 	}
 
+	tsp_debug_dbg(false, dev, "%s: resume scan\n", __func__);
 	rc = cyttsp5_hid_output_resume_scanning_(cd);
 	if (rc < 0) {
 		tsp_debug_err(true, cd->dev, "%s: error on resume scanning\n",
@@ -2711,13 +2714,6 @@ static int cyttsp5_get_config_ver_(struct cyttsp5_core_data *cd)
 
 	dev_vdbg(cd->dev, "%s: \n", __func__);
 
-	rc = cyttsp5_hid_output_suspend_scanning_(cd);
-	if (rc) {
-		tsp_debug_err(true, cd->dev, "%s: error on cyttsp5_hid_output_suspend_scanning_\n",
-			__func__);
-		goto error;
-	}
-
 	rc = cyttsp5_hid_output_read_conf_ver_(cd, &config_ver);
 	if (rc) {
 		tsp_debug_err(true, cd->dev, "%s: error on cyttsp5_hid_output_read_conf_ver_\n",
@@ -2728,8 +2724,6 @@ static int cyttsp5_get_config_ver_(struct cyttsp5_core_data *cd)
 	si->cydata.fw_ver_conf = config_ver;
 
 exit:
-	cyttsp5_hid_output_resume_scanning_(cd);
-error:
 	tsp_debug_dbg(false, cd->dev, "%s: rc=%d CONFIG_VER:%04X\n", __func__,
 		rc, config_ver);
 	return rc;
@@ -3187,7 +3181,11 @@ static int cyttsp5_hw_soft_reset(struct cyttsp5_core_data *cd)
 static int cyttsp5_hw_hard_reset(struct cyttsp5_core_data *cd)
 {
 	if (cd->cpdata->xres) {
+		if (cd->pdata->core_pdata->ta_gpio)
+			gpio_set_value(cd->pdata->core_pdata->ta_gpio, 0);
 		cd->cpdata->xres(cd->cpdata, cd->dev);
+		if (cd->pdata->core_pdata->ta_gpio)
+			gpio_set_value(cd->pdata->core_pdata->ta_gpio, cd->ta_status);
 		tsp_debug_dbg(false, cd->dev, "%s: execute HARD reset\n", __func__);
 		return 0;
 	}
@@ -3925,12 +3923,21 @@ static int cyttsp5_put_device_into_sleep_(struct cyttsp5_core_data *cd)
 static int cyttsp5_core_poweroff_device_(struct cyttsp5_core_data *cd)
 {
 	int rc;
-
+	if (cd->irq_enabled) {
+		disable_irq(cd->irq);
+		cd->irq_enabled = false;
+	}
 	/* No need for cd->pdata->power check since we did it in probe */
 	rc = cd->cpdata->power(cd->cpdata, 0, cd->dev, 0);
-	if (rc < 0)
+	if (rc < 0) {
 		tsp_debug_err(true, cd->dev, "%s: HW Power down fails r=%d\n",
 				__func__, rc);
+		if (!cd->irq_enabled) {
+			enable_irq(cd->irq);
+			cd->irq_enabled = true;
+		}
+		return rc;
+	}
 	cd->hw_power_state = false;
 	return rc;
 }
@@ -3973,11 +3980,15 @@ static int cyttsp5_core_sleep(struct cyttsp5_core_data *cd,
 	}
 	cyttsp5_samsung_factory_suspend_attention(cd->dev);
 
+	mutex_lock(&cd->system_lock);
 	if (_disable_irq && cd->irq_enabled) {
 		cd->irq_enabled = false;
 		disable_irq_nosync(cd->irq);
+		mutex_unlock(&cd->system_lock);
+
 		tsp_debug_dbg(true, cd->dev, "%s: irq disabled\n", __func__);
-	}
+	} else
+		mutex_unlock(&cd->system_lock);
 
 	rc = cyttsp5_core_sleep_(cd);
 
@@ -4231,13 +4242,24 @@ static irqreturn_t cyttsp5_irq(int irq, void *handle)
 	struct cyttsp5_core_data *cd = handle;
 	int rc;
 
+	mutex_lock(&cd->system_lock);
 	if (!cd->irq_enabled) {
+		mutex_unlock(&cd->system_lock);
+
 		tsp_debug_info(true, cd->dev, "%s: !cd->irq_enabled\n", __func__);
+		return IRQ_HANDLED;
+	} else
+		mutex_unlock(&cd->system_lock);
+
+	if (!cd->hw_power_state) {
+		if (printk_ratelimit())
+		dev_err(cd->dev, "%s: !cd->hw_power_state\n", __func__);
 		return IRQ_HANDLED;
 	}
 
-	if (!cd->hw_power_state) {
-		tsp_debug_info(true, cd->dev, "%s: !cd->hw_power_state\n", __func__);
+	if (cd->cpdata->irq_stat &&
+		cd->cpdata->irq_stat(cd->cpdata, cd->dev)) {
+		tsp_debug_dbg(true, cd->dev, "%s: interrupt pin is high\n", __func__);
 		return IRQ_HANDLED;
 	}
 
@@ -4374,6 +4396,244 @@ exit_reset:
 	return rc;
 }
 
+static void find_max_min_s16(u8* buf, int num_nodes, s16 *max_value, s16 *min_value)
+{
+	int i;
+	*max_value = 0x8000;
+	*min_value = 0x7FFF;
+
+	for (i = 0 ; i < num_nodes ; i++) {
+		*max_value = max((s16)*max_value, (s16)get_unaligned_le16(buf));
+		*min_value = min((s16)*min_value, (s16)get_unaligned_le16(buf));
+	#if defined(CY_TEST_RAW_READ_WITHOUT_CAL)
+		printk("cyttsp5 %s: node:%d value:%d\n", __func__, i,
+			(s16)get_unaligned_le16(buf));
+	#endif
+		buf += 2;
+	}
+}
+static void find_max_min_s8(u8* buf, int num_nodes, s16 *max_value, s16 *min_value)
+{
+	int i;
+	*max_value = 0x8000;
+	*min_value = 0x7FFF;
+
+	for (i = 0 ; i < num_nodes ; i++) {
+		*max_value = max((s8)*max_value, (s8)(*buf));
+		*min_value = min((s8)*min_value, (s8)(*buf));
+		buf += 1;
+	}
+}
+
+static int retrieve_panel_scan_all_elem(struct cyttsp5_core_data *cd,
+		u8* buf, u8 data_id, int num_nodes, u8* r_element_size/*in bytes*/)
+{
+	int rc = 0;
+	int elem = num_nodes;
+	int elem_offset = 0;
+	u16 actual_read_len;
+	u8 config;
+	u16 length;
+	u8 *buf_offset;
+	u8 element_size = 0;
+
+	if (num_nodes > CY_MAX_NODE_NUM) {
+		tsp_debug_err(true, cd->dev, "%s: num_nodes %d is wrong\n",
+			__func__, num_nodes);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	//memset(buf, 0, num_nodes * 2);
+
+	/* fill buf with header and data */
+	rc = cyttsp5_hid_output_retrieve_panel_scan_(cd, elem_offset, elem,
+		data_id, buf, &config, &actual_read_len, NULL);
+	if (rc < 0)
+		goto end;
+
+	length = get_unaligned_le16(buf);
+	buf_offset = buf + length;
+
+	element_size = config & CY_CMD_RET_PANEL_ELMNT_SZ_MASK;
+	if (element_size > 2) {
+		tsp_debug_err(true, cd->dev, "%s: element_size %d is wrong\n",
+			__func__, element_size);
+		rc = -EINVAL;
+		goto end;
+	}
+	*r_element_size = element_size;
+
+	elem -= actual_read_len;
+	elem_offset = actual_read_len;
+	while (elem > 0) {
+		/* append data to the buf */
+		rc = cyttsp5_hid_output_retrieve_panel_scan_(cd, elem_offset, elem,
+				data_id, NULL, &config, &actual_read_len, buf_offset);
+		if (rc < 0)
+			goto end;
+
+		if (!actual_read_len)
+			break;
+
+		length += actual_read_len * element_size;
+		buf_offset = buf + length;
+		elem -= actual_read_len;
+		elem_offset += actual_read_len;
+	}
+end:
+	return rc;
+}
+
+int cyttsp5_panel_scan_and_retrieve(struct device *dev,
+	u8 data_id, struct cyttsp5_sfd_panel_scan_data *panel_scan_data)
+{
+	struct cyttsp5_core_data *cd = dev_get_drvdata(dev);
+	struct cyttsp5_sysinfo *si = &cd->sysinfo;
+	int node_count;
+	int buf_offset;
+	int rc = 0;
+
+	tsp_debug_dbg(true, dev, "%s:\n", __func__);
+
+	if (!si->ready) {
+		tsp_debug_err(true, dev, "%s: sysinfo is not ready\n",
+			__func__);
+		return -EIO;
+	}
+
+	rc = request_exclusive(cd, cd->dev, CY_REQUEST_EXCLUSIVE_TIMEOUT);
+	if (rc < 0) {
+		tsp_debug_err(true, dev, "%s: request exclusive failed(%d)\n",
+			__func__, rc);
+		return rc;
+	}
+
+	rc = cyttsp5_hid_output_suspend_scanning_(cd);
+	if (rc < 0) {
+		tsp_debug_err(true, dev, "%s: suspend scanning failed r=%d\n",
+			__func__, rc);
+		goto release_exclusive;
+	}
+
+	rc = cyttsp5_hid_output_exec_panel_scan_(cd);
+	if (rc < 0) {
+		tsp_debug_err(true, dev, "%s: exec panel scan failed r=%d\n",
+			__func__, rc);
+		goto release_exclusive;
+	}
+
+	if (data_id == CY_MUT_RAW || data_id == CY_MUT_DIFF) {
+		node_count = si->sensing_conf_data.electrodes_x *
+			si->sensing_conf_data.electrodes_y;
+	} else {
+		node_count = si->sensing_conf_data.electrodes_x +
+			si->sensing_conf_data.electrodes_y;
+	}
+
+	rc = retrieve_panel_scan_all_elem(cd, panel_scan_data->buf, data_id,
+		node_count, &panel_scan_data->element_size);
+	if (rc < 0) {
+		tsp_debug_err(true, dev,
+			"%s: retrieve_panel_scan raw count failed r=%d\n",
+			__func__, rc);
+		goto release_exclusive;
+	}
+
+	if (data_id == CY_MUT_RAW || data_id == CY_MUT_DIFF) {
+		buf_offset = 0;
+	} else {
+		buf_offset = si->sensing_conf_data.electrodes_x *
+			panel_scan_data->element_size;
+	}
+
+	if (data_id == CY_SELF_RAW || data_id == CY_SELF_DIFF)
+		node_count = si->sensing_conf_data.electrodes_y;
+
+	if (panel_scan_data->element_size == 2)
+		find_max_min_s16(panel_scan_data->buf + CY_CMD_RET_PANEL_HDR + buf_offset,
+			node_count, &panel_scan_data->max, &panel_scan_data->min);
+	else
+		find_max_min_s8(panel_scan_data->buf + CY_CMD_RET_PANEL_HDR + buf_offset,
+			node_count, &panel_scan_data->max, &panel_scan_data->min);
+
+	rc = cyttsp5_hid_output_resume_scanning_(cd);
+	if (rc < 0) {
+		tsp_debug_err(true, dev, "%s: resume_scanning failed r=%d\n",
+			__func__, rc);
+	}
+
+release_exclusive:
+	if (release_exclusive(cd, cd->dev) < 0)
+		tsp_debug_err(true, dev, "%s: release_exclusive failed r=%d\n",
+			__func__, rc);
+
+	return rc;
+}
+
+static int count_more_than_s16(u8* buf, int num_nodes, s16 max_value)
+{
+	int i;
+	int count = 0;
+
+	for (i = 0 ; i < num_nodes ; i++) {
+		if ((s16)get_unaligned_le16(buf) > max_value)
+			count++;
+	#if defined(CY_TEST_COUNT_MORE_THAN_S16) || defined(CY_TEST_RECAL_ONE_SELF_NODE_32767)
+		printk("cyttsp5 %s: node:%d value:%d\n", __func__, i,
+			(s16)get_unaligned_le16(buf));
+	#endif
+		buf += 2;
+	}
+	return count;
+}
+
+#define SELF_RAW_MAX (32767)
+static int cyttsp5_check_rawcount(struct cyttsp5_core_data *cd)
+{
+	int rc = 0;
+	int retry = 3;
+	int buf_offset;
+	int count;
+	struct cyttsp5_sysinfo *si = &cd->sysinfo;
+
+panel_scan_and_retrieve:
+	rc = cyttsp5_panel_scan_and_retrieve(cd->dev, CY_SELF_RAW, &cd->panel_scan_data);
+	if (rc == 0) {
+		tsp_debug_info(true, cd->dev, "%s: self min:%d,max:%d\n", __func__,
+			cd->panel_scan_data.min, cd->panel_scan_data.max);
+		buf_offset = CY_CMD_RET_PANEL_HDR + si->sensing_conf_data.electrodes_x *
+			cd->panel_scan_data.element_size;
+#if defined(CY_TEST_COUNT_MORE_THAN_S16)
+		count = count_more_than_s16(cd->panel_scan_data.buf + buf_offset,
+			si->sensing_conf_data.electrodes_y, -8000);
+#else
+		count = count_more_than_s16(cd->panel_scan_data.buf + buf_offset,
+			si->sensing_conf_data.electrodes_y, SELF_RAW_MAX - 1);
+#endif
+		tsp_debug_info(true, cd->dev, "%s: num node out of range:%d\n",
+			__func__, count);
+#if defined(CY_TEST_RECAL_ONE_SELF_NODE_32767)
+		if (count >= 1) {
+#else
+		if (count >= si->sensing_conf_data.electrodes_y) {
+#endif
+			tsp_debug_info(true, cd->dev, "%s: rawcount out of range\n",
+				__func__);
+			return 1;
+		}
+		tsp_debug_info(true, cd->dev, "%s: rawcount in range\n", __func__);
+		return 0;
+	} else {
+		tsp_debug_err(true, cd->dev, "%s: panel_scan_and_retrieve fail\n",
+			__func__);
+		if (retry--)
+			goto panel_scan_and_retrieve;
+	}
+
+	return rc;
+}
+
 /*
  * returns err if refused ; if no error then restart has completed
  * and system is in normal operating mode
@@ -4382,6 +4642,8 @@ static int cyttsp5_startup(struct cyttsp5_core_data *cd);
 static int _cyttsp5_request_restart(struct device *dev)
 {
 	struct cyttsp5_core_data *cd = dev_get_drvdata(dev);
+	int retry;
+
 	int rc = 0;
 
 	mutex_lock(&cd->system_lock);
@@ -4397,13 +4659,28 @@ static int _cyttsp5_request_restart(struct device *dev)
 	}
 
 	tsp_debug_dbg(false, dev, "%s: calibrate after fw upgrade\n", __func__);
-	rc = cyttsp5_fw_calibrate(cd->dev);
-	if (rc < 0) {
-		tsp_debug_err(true, cd->dev, "%s: calibration fail, rc=%d\n", __func__,
-			rc);
-		return rc;
+	retry = CY_CALIBRATION_RETRY;
+recal:
+	if (retry != CY_CALIBRATION_RETRY) {
+		tsp_debug_dbg(true, cd->dev, "%s: Retry %d\n", __func__,
+			CY_CALIBRATION_RETRY - retry);
+		msleep(CY_CALIBRATION_RETRY_DELAY);
 	}
 
+	rc = cyttsp5_fw_calibrate(cd->dev);
+	if (rc < 0) {
+		tsp_debug_err(true, cd->dev, "%s: calibration fail, rc=%d\n",
+			__func__, rc);
+		CY_RETRY_OR_EXIT(retry--, recal, exit);
+	}
+
+	rc = cyttsp5_check_rawcount(cd);
+	if (rc != 0) {
+		tsp_debug_err(true, cd->dev, "%s: check rawcount fail, rc=%d\n",
+			__func__, rc);
+		CY_RETRY_OR_EXIT(retry--, recal, exit);
+	}
+exit:
 	return rc;
 }
 
@@ -4476,6 +4753,10 @@ static int cyttsp5_core_poweron_device_(struct cyttsp5_core_data *cd)
 		goto exit;
 	}
 	cd->hw_power_state = true;
+	if (!cd->irq_enabled) {
+		enable_irq(cd->irq);
+		cd->irq_enabled = true;
+	}
 	cyttsp5_queue_startup(cd);
 exit:
 	return rc;
@@ -4513,11 +4794,6 @@ static int cyttsp5_core_wake(struct cyttsp5_core_data *cd,
 
 	rc = cyttsp5_core_wake_(cd);
 
-	if (_enable_irq && !cd->irq_enabled) {
-		cd->irq_enabled = true;
-		enable_irq(cd->irq);
-		tsp_debug_dbg(true, cd->dev, "%s: irq enabled\n", __func__);
-	}
 
 	if (release_exclusive(cd, cd->dev) < 0)
 		tsp_debug_err(true, cd->dev, "%s: fail to release exclusive\n", __func__);
@@ -4542,10 +4818,6 @@ static int cyttsp5_get_ic_crc_(struct cyttsp5_core_data *cd, u8 ebid)
 
 	dev_vdbg(cd->dev, "%s: \n", __func__);
 
-	rc = cyttsp5_hid_output_suspend_scanning_(cd);
-	if (rc)
-		goto error;
-
 	rc = cyttsp5_hid_output_verify_config_block_crc_(cd, ebid, &status,
 			&calculated_crc, &stored_crc);
 	if (rc)
@@ -4559,8 +4831,6 @@ static int cyttsp5_get_ic_crc_(struct cyttsp5_core_data *cd, u8 ebid)
 	si->ttconfig.crc = stored_crc;
 
 exit:
-	cyttsp5_hid_output_resume_scanning_(cd);
-error:
 	tsp_debug_dbg(false, cd->dev, "%s: CRC: ebid:%d, crc:0x%04X\n",
 			__func__, ebid, si->ttconfig.crc);
 	return rc;
@@ -4580,30 +4850,19 @@ static int cyttsp5_si_get_samsung_tsp_info_(struct cyttsp5_core_data *cd)
 
 	tsp_debug_dbg(false, cd->dev, "%s: \n", __func__);
 
-	rc = cyttsp5_hid_output_suspend_scanning_(cd);
-	if (rc)
-		goto error;
-
 	rc = cyttsp5_hid_output_read_conf_block_(cd, 0, sizeof(read_buf),
 		CY_DDATA_EBID, read_buf, &crc);
 	if (rc)
 		goto exit;
 
-#if 0
-	{
-	int i;
-	tsp_debug_dbg(false, cd->dev, "%s: read_buf:", __func__);
-	for (i = SAMSUNG_TSP_INFO_OFFSET; i < sizeof(read_buf); i++)
-		tsp_debug_dbg(false, cd->dev, "%s: %d", __func__, read_buf[i]);
-	}
-#endif
-
 	memcpy(sti, &read_buf[SAMSUNG_TSP_INFO_OFFSET],
 		sizeof(struct cyttsp5_samsung_tsp_info_dev));
 
+	tsp_debug_info(true, cd->dev, "%s: tsp hw ver=0x%02x, fw ver=0x%04x\n",
+		__func__, sti->hw_version,
+		get_unaligned_be16(&sti->fw_versionh));
+
 exit:
-	rc = cyttsp5_hid_output_resume_scanning_(cd);
-error:
 	tsp_debug_dbg(false, cd->dev, "%s: rc=%d\n", __func__, rc);
 	return rc;
 }
@@ -4641,16 +4900,24 @@ static int cyttsp4_check_and_deassert_int(struct cyttsp5_core_data *cd)
 }
 #endif
 
+#define CY_CORE_STARTUP_RETRY_COUNT	3
 static int cyttsp5_startup_(struct cyttsp5_core_data *cd)
 {
 	int rc;
 	int t;
+	int retry;
 
 #ifdef TTHE_TUNER_SUPPORT
 	tthe_print(cd, NULL, 0, "enter startup");
 #endif
 
 	cyttsp5_stop_wd_timer(cd);
+
+	retry = CY_CORE_STARTUP_RETRY_COUNT;
+reset:
+	if (retry != CY_CORE_STARTUP_RETRY_COUNT)
+		tsp_debug_dbg(true, cd->dev, "%s: Retry %d\n", __func__,
+			CY_CORE_STARTUP_RETRY_COUNT - retry);
 
 #if CYTTSP5_USE_SLEEP
 	rc = cyttsp4_check_and_deassert_int(cd);
@@ -4666,8 +4933,17 @@ static int cyttsp5_startup_(struct cyttsp5_core_data *cd)
 			goto reset_error;
 	} else {
 		tsp_debug_dbg(true, cd->dev, "%s: hw power on now\n", __func__);
-		cd->hw_power_state = true;
+
 		rc = cd->cpdata->power(cd->cpdata, 1, cd->dev, 0);
+		mutex_lock(&cd->system_lock);
+		if (!cd->irq_enabled) {
+			cd->irq_enabled = true;
+			enable_irq(cd->irq);
+			mutex_unlock(&cd->system_lock);
+			tsp_debug_dbg(true, cd->dev, "%s: irq enabled\n", __func__);
+		} else
+			mutex_unlock(&cd->system_lock);
+		cd->hw_power_state = true;
 	}
 	t = wait_event_timeout(cd->wait_q, (cd->hid_reset_cmd_state == 0),
 			msecs_to_jiffies(CY_HID_RESET_TIMEOUT));
@@ -4689,7 +4965,7 @@ exit_reset:
 	if (rc < 0) {
 		tsp_debug_err(true, cd->dev, "%s: Error on getting HID descriptor r=%d\n",
 			__func__, rc);
-		goto exit;
+		CY_RETRY_OR_EXIT(retry--, reset, exit);
 	}
 	cd->mode = cyttsp5_get_mode(cd, &cd->hid_desc);
 
@@ -4706,18 +4982,18 @@ exit_reset:
 		if (rc < 0) {
 			tsp_debug_err(true, cd->dev, "%s: Error on launch app r=%d\n",
 				__func__, rc);
-			goto exit;
+			CY_RETRY_OR_EXIT(retry--, reset, exit);
 		}
 		rc = cyttsp5_get_hid_descriptor_(cd, &cd->hid_desc);
 		if (rc < 0) {
 			tsp_debug_err(true, cd->dev,
 				"%s: Error on getting HID descriptor r=%d\n",
 				__func__, rc);
-			goto exit;
+			CY_RETRY_OR_EXIT(retry--, reset, exit);
 		}
 		cd->mode = cyttsp5_get_mode(cd, &cd->hid_desc);
 		if (cd->mode == CY_MODE_BOOTLOADER)
-			goto exit;
+			CY_RETRY_OR_EXIT(retry--, reset, exit);
 	}
 
 	mutex_lock(&cd->system_lock);
@@ -4738,7 +5014,7 @@ exit_reset:
 		tsp_debug_err(true, cd->dev, "%s: Unknown mode\n", __func__);
 		rc = -ENODEV;
 		mutex_unlock(&cd->system_lock);
-		goto exit;
+		CY_RETRY_OR_EXIT(retry--, reset, exit);
 	}
 	mutex_unlock(&cd->system_lock);
 
@@ -4747,8 +5023,9 @@ exit_reset:
 	if (rc < 0) {
 		tsp_debug_err(true, cd->dev, "%s: Error on getting report descriptor r=%d\n",
 			__func__, rc);
-		goto exit;
+		CY_RETRY_OR_EXIT(retry--, reset, exit);
 	}
+
 #ifndef CONFIG_SEC_FACTORY
 	if (!cd->sysinfo.ready || cd->check_postl) {
 #endif
@@ -4757,14 +5034,23 @@ exit_reset:
 		if (rc) {
 			tsp_debug_err(true, cd->dev, "%s: Error on getting sysinfo r=%d\n",
 				__func__, rc);
-			goto exit;
+			CY_RETRY_OR_EXIT(retry--, reset, exit);
+		}
+
+		rc = cyttsp5_hid_output_suspend_scanning_(cd);
+		if (rc) {
+			tsp_debug_err(true, cd->dev, "%s: error on suspend scan, rc=%d\n",
+				__func__, rc);
+			CY_RETRY_OR_EXIT(retry--, reset, exit);
 		}
 
 #ifdef SAMSUNG_TSP_INFO
 		rc = cyttsp5_si_get_samsung_tsp_info_(cd);
-		if (rc)
+		if (rc) {
 			tsp_debug_err(true, cd->dev, "%s: failed to get samsung tsp info rc=%d\n",
 				__func__, rc);
+			CY_RETRY_OR_EXIT(retry--, reset, exit);
+		}
 #endif
 
 		rc = cyttsp5_get_config_ver_(cd);
@@ -4776,12 +5062,21 @@ exit_reset:
 		if (rc)
 			tsp_debug_err(true, cd->dev, "%s: failed to crc data rc=%d\n",
 				__func__, rc);
+
+		rc = cyttsp5_hid_output_resume_scanning_(cd);
+		if (rc) {
+			tsp_debug_err(true, cd->dev, "%s: error on resume scan, rc=%d\n",
+				__func__, rc);
+			CY_RETRY_OR_EXIT(retry--, reset, exit);
+		}
+
 #ifndef CONFIG_SEC_FACTORY
 	} else {
 		tsp_debug_dbg(false, cd->dev, "%s: bypass getting sysinfo\n", __func__);
 		//msleep(100);
 	}
 #endif
+
 	/* attention startup */
 	call_atten_cb(cd, CY_ATTEN_STARTUP, 0);
 
@@ -5535,6 +5830,15 @@ int cyttsp5_probe(const struct cyttsp5_bus_ops *ops, struct device *dev,
 		goto error_alloc_data;
 	}
 
+	cd->panel_scan_data.buf = kzalloc((CY_MAX_INPUT_HEADER_SIZE +
+		CY_MAX_NODE_NUM * 2), GFP_KERNEL);
+	if (cd->panel_scan_data.buf == NULL) {
+		tsp_debug_err(true, dev, "%s: Error, kzalloc cd->panel_scan_data.buf\n",
+			__func__);
+		rc = -ENOMEM;
+		goto error_alloc_panel_data;
+	}
+
 	/* Initialize device info */
 	cd->dev = dev;
 	cd->pdata = pdata;
@@ -5574,7 +5878,7 @@ int cyttsp5_probe(const struct cyttsp5_bus_ops *ops, struct device *dev,
 		rc = -EINVAL;
 		goto error_gpio_irq;
 	}
-	cd->irq_enabled = true;
+	cd->irq_enabled = false;
 
 	dev_set_drvdata(dev, cd);
 	cyttsp5_add_core(dev);
@@ -5582,6 +5886,8 @@ int cyttsp5_probe(const struct cyttsp5_bus_ops *ops, struct device *dev,
 	/* Call platform init function */
 	if (cd->cpdata->init) {
 		tsp_debug_dbg(false, cd->dev, "%s: Init HW\n", __func__);
+
+		cd->hw_power_state = false;
 		rc = cd->cpdata->init(cd->cpdata, 1, cd->dev);
 	} else {
 		tsp_debug_info(true, cd->dev, "%s: No HW INIT function\n", __func__);
@@ -5592,13 +5898,17 @@ int cyttsp5_probe(const struct cyttsp5_bus_ops *ops, struct device *dev,
 
 
 	tsp_debug_dbg(false, dev, "%s: initialize threaded irq=%d\n", __func__, cd->irq);
+	irq_set_status_flags(cd->irq, IRQ_NOAUTOEN);
+#if 0
 	if (cd->cpdata->level_irq_udelay > 0)
 		/* use level triggered interrupts */
 		irq_flags = IRQF_TRIGGER_LOW | IRQF_ONESHOT;
 	else
 		/* use edge triggered interrupts */
 		irq_flags = IRQF_TRIGGER_FALLING | IRQF_ONESHOT;
-
+#else
+	irq_flags = IRQF_TRIGGER_LOW | IRQF_ONESHOT;
+#endif
 	rc = request_threaded_irq(cd->irq, NULL, cyttsp5_irq, irq_flags,
 		dev_name(dev), cd);
 	if (rc < 0) {
@@ -5696,6 +6006,15 @@ int cyttsp5_probe(const struct cyttsp5_bus_ops *ops, struct device *dev,
 	mutex_unlock(&cd->system_lock);
 	tsp_debug_dbg(true, dev, "%s: success\n", __func__);
 
+	rc = cyttsp5_check_rawcount(cd);
+	if (rc == 1) {
+		tsp_debug_err(true, cd->dev, "%s: rawcount out of range\n",
+			__func__);
+		rc = cyttsp5_fw_calibrate(cd->dev);
+		if (rc < 0)
+			tsp_debug_err(true, cd->dev, "%s: calibration fail, rc=%d\n",
+			__func__, rc);
+	}
 	return 0;
 
 error_startup_debug:
@@ -5723,6 +6042,8 @@ error_request_irq:
 		cd->cpdata->init(cd->cpdata, 0, dev);
 	dev_set_drvdata(dev, NULL);
 error_gpio_irq:
+	kfree(cd->panel_scan_data.buf);
+error_alloc_panel_data:
 	kfree(cd);
 error_alloc_data:
 error_no_pdata:
@@ -5734,6 +6055,9 @@ EXPORT_SYMBOL(cyttsp5_probe);
 int cyttsp5_release(struct cyttsp5_core_data *cd)
 {
 	struct device *dev = cd->dev;
+
+	cd->register_cb = NULL;
+	cd->callbacks.inform_charger = NULL;
 
 	cyttsp5_debug_release(dev);
 	cyttsp5_device_access_release(dev);

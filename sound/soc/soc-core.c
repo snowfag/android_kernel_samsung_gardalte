@@ -1889,9 +1889,13 @@ unsigned int snd_soc_read(struct snd_soc_codec *codec, unsigned int reg)
 {
 	unsigned int ret;
 
-	ret = codec->read(codec, reg);
-	dev_dbg(codec->dev, "read %x => %x\n", reg, ret);
-	trace_snd_soc_reg_read(codec, reg, ret);
+        if (codec->read) {
+		ret = codec->read(codec, reg);
+		dev_dbg(codec->dev, "read %x => %x\n", reg, ret);
+		trace_snd_soc_reg_read(codec, reg, ret);
+        }
+        else
+		ret = -EIO;
 
 	return ret;
 }
@@ -1900,9 +1904,13 @@ EXPORT_SYMBOL_GPL(snd_soc_read);
 unsigned int snd_soc_write(struct snd_soc_codec *codec,
 			   unsigned int reg, unsigned int val)
 {
-	dev_dbg(codec->dev, "write %x = %x\n", reg, val);
-	trace_snd_soc_reg_write(codec, reg, val);
-	return codec->write(codec, reg, val);
+	if (codec->write) {
+		dev_dbg(codec->dev, "write %x = %x\n", reg, val);
+		trace_snd_soc_reg_write(codec, reg, val);
+		return codec->write(codec, reg, val);
+        }
+	else
+		return -EIO;
 }
 EXPORT_SYMBOL_GPL(snd_soc_write);
 
@@ -2700,7 +2708,7 @@ EXPORT_SYMBOL_GPL(snd_soc_put_volsw_s8);
  * returns 0 for success.
  */
 int snd_soc_info_volsw_range(struct snd_kcontrol *kcontrol,
-			struct snd_ctl_elem_info *uinfo)
+	struct snd_ctl_elem_info *uinfo)
 {
 	struct soc_mixer_control *mc =
 		(struct soc_mixer_control *)kcontrol->private_value;
@@ -2730,7 +2738,7 @@ EXPORT_SYMBOL_GPL(snd_soc_info_volsw_range);
  * Returns 0 for success.
  */
 int snd_soc_put_volsw_range(struct snd_kcontrol *kcontrol,
-			struct snd_ctl_elem_value *ucontrol)
+	struct snd_ctl_elem_value *ucontrol)
 {
 	struct soc_mixer_control *mc =
 		(struct soc_mixer_control *)kcontrol->private_value;
@@ -2763,7 +2771,7 @@ EXPORT_SYMBOL_GPL(snd_soc_put_volsw_range);
  * Returns 0 for success.
  */
 int snd_soc_get_volsw_range(struct snd_kcontrol *kcontrol,
-			struct snd_ctl_elem_value *ucontrol)
+	struct snd_ctl_elem_value *ucontrol)
 {
 	struct soc_mixer_control *mc =
 		(struct soc_mixer_control *)kcontrol->private_value;
@@ -2819,8 +2827,8 @@ int snd_soc_limit_volume(struct snd_soc_codec *codec,
 		mc = (struct soc_mixer_control *)kctl->private_value;
 		if (max <= mc->max) {
 			mc->platform_max = max;
-	ret = 0;
-	}
+			ret = 0;
+		}
 	}
 	return ret;
 }
@@ -2885,7 +2893,7 @@ int snd_soc_bytes_put(struct snd_kcontrol *kcontrol,
 	unsigned int val;
 	void *data;
 
-	if (!codec->using_regmap)
+	if (!codec->using_regmap || !params->num_regs)
 		return -EINVAL;
 
 	data = ucontrol->value.bytes.data;

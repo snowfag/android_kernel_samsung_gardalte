@@ -126,11 +126,11 @@ static void exynos4_mct_frc_start(u32 hi, u32 lo)
 	tmp = reg & MCT_G_TCON_START;
 
 	if (!tmp) {
-	exynos4_mct_write(lo, EXYNOS4_MCT_G_CNT_L);
-	exynos4_mct_write(hi, EXYNOS4_MCT_G_CNT_U);
+		exynos4_mct_write(lo, EXYNOS4_MCT_G_CNT_L);
+		exynos4_mct_write(hi, EXYNOS4_MCT_G_CNT_U);
 
-	reg |= MCT_G_TCON_START;
-	exynos4_mct_write(reg, EXYNOS4_MCT_G_TCON);
+		reg |= MCT_G_TCON_START;
+		exynos4_mct_write(reg, EXYNOS4_MCT_G_TCON);
 	}
 }
 
@@ -172,11 +172,11 @@ static cycle_t exynos4_frc_read(struct clocksource *cs)
 		/* 64bit supporting clocksource */
 		unsigned int hi, hi2, lo;
 		hi2 = __raw_readl(EXYNOS4_MCT_G_CNT_U);
-	do {
-		hi = hi2;
-		lo = __raw_readl(EXYNOS4_MCT_G_CNT_L);
-		hi2 = __raw_readl(EXYNOS4_MCT_G_CNT_U);
-	} while (hi != hi2);
+		do {
+			hi = hi2;
+			lo = __raw_readl(EXYNOS4_MCT_G_CNT_L);
+			hi2 = __raw_readl(EXYNOS4_MCT_G_CNT_U);
+		} while (hi != hi2);
 		val = ((cycle_t)hi << 32) | lo;
 	} else  /* 32bit supporting clocksource */
 		val = __raw_readl(EXYNOS4_MCT_G_CNT_L);
@@ -380,7 +380,7 @@ static int exynos4_tick_set_next_event(unsigned long cycles,
 
 	if ((evt->mode != CLOCK_EVT_MODE_SHUTDOWN)
 		&& (evt->mode != CLOCK_EVT_MODE_UNUSED))
-	exynos4_mct_tick_start(cycles, mevt);
+		exynos4_mct_tick_start(cycles, mevt);
 
 	return 0;
 }

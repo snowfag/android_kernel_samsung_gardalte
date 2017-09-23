@@ -27,7 +27,7 @@ static int m5mols_wb_mode(struct m5mols_info *info, struct v4l2_ctrl *ctrl)
 
 	if (info->is_awb_lock) {
 		ret = m5mols_set_awb_lock(info, false);
-	if (!ret)
+		if (!ret)
 			return ret;
 	}
 
@@ -45,7 +45,7 @@ static int m5mols_exposure_mode(struct m5mols_info *info,
 	if (info->is_ae_lock) {
 		ret = m5mols_set_ae_lock(info, false);
 		if (ret)
-	return ret;
+			return ret;
 	}
 
 	/* 0x01 : Auto Exposure, 0x0 : Manual Exposure. */
@@ -178,7 +178,7 @@ int m5mols_set_ctrl(struct v4l2_ctrl *ctrl)
 	case V4L2_CID_FOCUS_AUTO:
 		if (ctrl->val != 0)
 			ret = m5mols_focus_mode(info, ctrl);
-			if (!ret)
+		if (!ret)
 			ret = m5mols_focus(info, ctrl);
 		return ret;
 	case V4L2_CID_EXPOSURE_AUTO:

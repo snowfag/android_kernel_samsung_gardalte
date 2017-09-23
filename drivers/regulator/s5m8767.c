@@ -640,27 +640,27 @@ static __devinit int s5m8767_pmic_probe(struct platform_device *pdev)
 							buck_voltage_val1.step);
 	} else {
 		sec_reg_read(s5m8767->iodev, S5M8767_REG_BUCK1CTRL2, &buck_init);
-		}
+	}
 	sec_reg_write(s5m8767->iodev, S5M8767_REG_BUCK1DVS2, buck_init);
 
 	if (pdata->buck2_init) {
 		buck_init = s5m8767_convert_voltage_to_sel(&buck_voltage_val2,
 							pdata->buck2_init,
 							pdata->buck2_init +
-						buck_voltage_val2.step);
+							buck_voltage_val2.step);
 	} else {
 		sec_reg_read(s5m8767->iodev, S5M8767_REG_BUCK2DVS1, &buck_init);
-		}
+	}
 	sec_reg_write(s5m8767->iodev, S5M8767_REG_BUCK2DVS2, buck_init);
 
 	if (pdata->buck3_init) {
 		buck_init = s5m8767_convert_voltage_to_sel(&buck_voltage_val2,
 							pdata->buck3_init,
 							pdata->buck3_init +
-						buck_voltage_val2.step);
+							buck_voltage_val2.step);
 	} else {
 		sec_reg_read(s5m8767->iodev, S5M8767_REG_BUCK3DVS1, &buck_init);
-		}
+	}
 	sec_reg_write(s5m8767->iodev, S5M8767_REG_BUCK3DVS2, buck_init);
 
 	if (pdata->buck4_init) {
@@ -674,33 +674,33 @@ static __devinit int s5m8767_pmic_probe(struct platform_device *pdev)
 	sec_reg_write(s5m8767->iodev, S5M8767_REG_BUCK4DVS2, buck_init);
 
 
-		if (gpio_is_valid(pdata->buck_gpios[0]) &&
-			gpio_is_valid(pdata->buck_gpios[1]) &&
-			gpio_is_valid(pdata->buck_gpios[2])) {
+	if (gpio_is_valid(pdata->buck_gpios[0]) &&
+		gpio_is_valid(pdata->buck_gpios[1]) &&
+		gpio_is_valid(pdata->buck_gpios[2])) {
 		ret = gpio_request(pdata->buck_gpios[0], "S5M8767 SET1");
-			if (ret == -EBUSY)
+		if (ret == -EBUSY)
 			dev_warn(&pdev->dev, "Duplicated gpio request"
 				" for SET1\n");
 
 		ret = gpio_request(pdata->buck_gpios[1], "S5M8767 SET2");
-			if (ret == -EBUSY)
+		if (ret == -EBUSY)
 			dev_warn(&pdev->dev, "Duplicated gpio request"
 				" for SET2\n");
 
 		ret = gpio_request(pdata->buck_gpios[2], "S5M8767 SET3");
-			if (ret == -EBUSY)
+		if (ret == -EBUSY)
 			dev_warn(&pdev->dev, "Duplicated gpio request"
 					" for SET3\n");
-			/* SET1 GPIO */
+		/* SET1 GPIO */
 		gpio_direction_output(pdata->buck_gpios[0], 0);
-			/* SET2 GPIO */
+		/* SET2 GPIO */
 		gpio_direction_output(pdata->buck_gpios[1], 0);
-			/* SET3 GPIO */
+		/* SET3 GPIO */
 		gpio_direction_output(pdata->buck_gpios[2], 1);
-			ret = 0;
-		} else {
-			dev_err(&pdev->dev, "GPIO NOT VALID\n");
-			ret = -EINVAL;
+		ret = 0;
+	} else {
+		dev_err(&pdev->dev, "GPIO NOT VALID\n");
+		ret = -EINVAL;
 		goto err_alloc;
 	}
 
@@ -738,7 +738,7 @@ static __devinit int s5m8767_pmic_probe(struct platform_device *pdev)
 		sec_reg_update(s5m8767->iodev, S5M8767_REG_DVSRAMP, 0x02, 0x02);
 
 	if (s5m8767->buck2_ramp || s5m8767->buck3_ramp
-		|| s5m8767->buck4_ramp) {
+	    || s5m8767->buck4_ramp) {
 		switch (s5m8767->ramp_delay) {
 		case 5:
 			sec_reg_update(s5m8767->iodev, S5M8767_REG_DVSRAMP,

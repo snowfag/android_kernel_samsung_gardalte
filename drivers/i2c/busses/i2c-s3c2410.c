@@ -1153,7 +1153,7 @@ static int s3c24xx_i2c_resume_noirq(struct device *dev)
 	ret = s3c24xx_i2c_init(i2c);
 	if (ret) {
 		i2c_unlock_adapter(&i2c->adap);
-	clk_disable(i2c->clk);
+		clk_disable(i2c->clk);
 		return ret;
 	}
 

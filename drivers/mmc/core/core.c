@@ -32,7 +32,6 @@
 #include <linux/mmc/host.h>
 #include <linux/mmc/mmc.h>
 #include <linux/mmc/sd.h>
-#include <linux/stlog.h>
 #include <linux/mmc/mmc_trace.h>
 
 #include "core.h"
@@ -43,6 +42,12 @@
 #include "mmc_ops.h"
 #include "sd_ops.h"
 #include "sdio_ops.h"
+
+#ifdef CONFIG_MMC_SUPPORT_STLOG
+#include <linux/stlog.h>
+#else
+#define ST_LOG(fmt,...)
+#endif
 
 #if defined(CONFIG_BLK_DEV_IO_TRACE)
 #include "../card/queue.h"
@@ -487,7 +492,7 @@ struct mmc_async_req *mmc_start_req(struct mmc_host *host,
 
 	 /* Cancel a prepared request if it was not started. */
 	if ((err || start_err) && areq) {
-			mmc_post_req(host, areq->mrq, -EINVAL);
+		mmc_post_req(host, areq->mrq, -EINVAL);
 		if (areq->__mrq)
 			mmc_post_req(host, areq->__mrq, -EINVAL);
 	}
@@ -2195,7 +2200,7 @@ EXPORT_SYMBOL(mmc_detect_card_removed);
 
 void mmc_rescan(struct work_struct *work)
 {
-	static const unsigned freqs[] = { 400000 };
+	static const unsigned freqs[] = { 400000, 300000 };
 	struct mmc_host *host =
 		container_of(work, struct mmc_host, detect.work);
 	int i;
@@ -2598,6 +2603,7 @@ int mmc_pm_notify(struct notifier_block *notify_block,
 	switch (mode) {
 	case PM_HIBERNATION_PREPARE:
 	case PM_SUSPEND_PREPARE:
+	case PM_RESTORE_PREPARE:
 
 		spin_lock_irqsave(&host->lock, flags);
 		if (mmc_bus_needs_resume(host)) {

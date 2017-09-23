@@ -208,7 +208,7 @@ EXPORT_SYMBOL_GPL(cpu_cluster_pm_exit);
 static int cpu_pm_suspend(void)
 {
 	int ret;
-
+	
 #if 0	// Block temporarily until debug_exynos5260.c is applied.
 #ifdef CONFIG_SEC_PM
 	if (FLAG_T32_EN)

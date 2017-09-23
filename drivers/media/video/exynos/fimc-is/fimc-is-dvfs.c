@@ -24,6 +24,7 @@ DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_DUAL_CAMCORDING);
 DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_DUAL_PREVIEW);
 DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_HIGH_SPEED_FPS);
 DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_CAMCORDING_FHD);
+DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_CAMCORDING_WHD);
 DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_CAMCORDING_UHD);
 DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_PREVIEW_FHD);
 DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_PREVIEW_WHD);
@@ -57,6 +58,10 @@ static struct fimc_is_dvfs_scenario static_scenarios[] = {
 		.scenario_id		= FIMC_IS_SN_REAR_CAMCORDING_FHD,
 		.scenario_nm		= DVFS_SN_STR(FIMC_IS_SN_REAR_CAMCORDING_FHD),
 		.check_func		= GET_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_CAMCORDING_FHD),
+	}, {
+		.scenario_id		= FIMC_IS_SN_REAR_CAMCORDING_WHD,
+		.scenario_nm		= DVFS_SN_STR(FIMC_IS_SN_REAR_CAMCORDING_WHD),
+		.check_func		= GET_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_CAMCORDING_WHD),
 	}, {
 		.scenario_id		= FIMC_IS_SN_REAR_CAMCORDING_UHD,
 		.scenario_nm		= DVFS_SN_STR(FIMC_IS_SN_REAR_CAMCORDING_UHD),
@@ -135,7 +140,8 @@ static struct fimc_is_dvfs_scenario dynamic_scenarios[] = {
 };
 #endif
 
-static inline int fimc_is_get_open_sensor_cnt(struct fimc_is_core *core) {
+static inline int fimc_is_get_open_sensor_cnt(struct fimc_is_core *core)
+{
 	int i, sensor_cnt = 0;
 
 	for (i = 0; i < FIMC_IS_MAX_NODES; i++)
@@ -143,6 +149,26 @@ static inline int fimc_is_get_open_sensor_cnt(struct fimc_is_core *core) {
 			sensor_cnt++;
 
 	return sensor_cnt;
+}
+
+static inline u32 fimc_is_chk_req(struct fimc_is_frame *frame, enum fimc_is_video_dev_num vid)
+{
+	int i;
+	struct camera2_node *node;
+	u32 ret = 0;
+
+	if (frame == NULL)
+		return ret;
+
+	for (i = 0; i < CAPTURE_NODE_MAX; i++) {
+		node = &frame->shot_ext->node_group.capture[i];
+		if (node->vid == vid) {
+			ret = node->request;
+			break;
+		}
+	}
+
+	return ret;
 }
 
 /* dual capture */
@@ -218,6 +244,23 @@ DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_CAMCORDING_FHD)
 		return 0;
 }
 
+/* rear camcording WHD*/
+DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_CAMCORDING_WHD)
+{
+	u32 mask = (device->setfile & FIMC_IS_SETFILE_MASK);
+	bool setfile_flag = (mask == ISS_SUB_SCENARIO_VIDEO) ||
+			(mask == ISS_SUB_SCENARIO_VIDEO_WDR);
+
+	if ((device->sensor->pdev->id == SENSOR_POSITION_REAR) &&
+			(fimc_is_sensor_g_framerate(device->sensor) <= 30) &&
+			(device->chain3_width * device->chain3_height > SIZE_FHD) &&
+			(device->chain3_width * device->chain3_height <= SIZE_WHD) &&
+			setfile_flag)
+		return 1;
+	else
+		return 0;
+}
+
 /* rear camcording UHD*/
 DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_CAMCORDING_UHD)
 {
@@ -227,7 +270,7 @@ DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_CAMCORDING_UHD)
 
 	if ((device->sensor->pdev->id == SENSOR_POSITION_REAR) &&
 			(fimc_is_sensor_g_framerate(device->sensor) <= 30) &&
-			(device->chain3_width * device->chain3_height > SIZE_FHD) &&
+			(device->chain3_width * device->chain3_height > SIZE_WHD) &&
 			(device->chain3_width * device->chain3_height <= SIZE_UHD) &&
 			setfile_flag)
 		return 1;
@@ -315,7 +358,8 @@ DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_FRONT_PREVIEW)
 DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_REAR_CAPTURE)
 {
 	if ((device->sensor->pdev->id == SENSOR_POSITION_REAR) &&
-			(test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state)))
+			((test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state)) ||
+			fimc_is_chk_req(frame, FIMC_IS_VIDEO_SCC_NUM)))
 		return 1;
 	else
 		return 0;
@@ -402,7 +446,7 @@ int fimc_is_dvfs_init(struct fimc_is_resourcemgr *resourcemgr)
 	return 0;
 }
 
-int fimc_is_dvfs_sel_scenario(u32 type, struct fimc_is_device_ischain *device)
+int fimc_is_dvfs_sel_scenario(u32 type, struct fimc_is_device_ischain *device, struct fimc_is_frame *frame)
 {
 	struct fimc_is_dvfs_ctrl *dvfs_ctrl;
 	struct fimc_is_dvfs_scenario_ctrl *static_ctrl, *dynamic_ctrl;
@@ -470,7 +514,7 @@ int fimc_is_dvfs_sel_scenario(u32 type, struct fimc_is_device_ischain *device)
 			continue;
 		}
 
-		if ((scenarios[i].check_func(device)) > 0) {
+		if ((scenarios[i].check_func(device, frame)) > 0) {
 			scenario_id = scenarios[i].scenario_id;
 
 			if (type == FIMC_IS_DYNAMIC_SN) {

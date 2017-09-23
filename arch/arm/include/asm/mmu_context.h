@@ -52,7 +52,7 @@ static inline void switch_new_context(struct mm_struct *mm)
 {
 	unsigned long flags;
 
-		__new_context(mm);
+	__new_context(mm);
 
 	local_irq_save(flags);
 	cpu_switch_mm(mm->pgd, mm);

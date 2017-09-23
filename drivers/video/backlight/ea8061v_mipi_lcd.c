@@ -107,6 +107,7 @@ struct lcd_info {
 
 	unsigned int			coordinate[2];
 	unsigned char			date[2];
+	unsigned int			need_update;
 
 	struct mipi_dsim_device		*dsim;
 };
@@ -716,7 +717,7 @@ static int init_hbm_parameter(struct lcd_info *lcd, const u8 *mtp_data, const u8
 	int i;
 
 	for (i = 0; i < GAMMA_PARAM_SIZE; i++)
-		lcd->gamma_table[GAMMA_HBM][i] = lcd->gamma_table[GAMMA_300CD][i];
+		lcd->gamma_table[GAMMA_HBM][i] = lcd->gamma_table[GAMMA_350CD][i];
 
 	/* C8 : 34~39 -> CA : 1~6 */
 	for (i = 0; i < 6; i++)
@@ -777,6 +778,8 @@ static int update_brightness(struct lcd_info *lcd, u8 force)
 static int ea8061v_ldi_init(struct lcd_info *lcd)
 {
 	int ret = 0;
+	lcd->need_update = 0;
+
 	ea8061v_write(lcd, SEQ_APPLY_LEVEL_2_KEY_UNLOCK, ARRAY_SIZE(SEQ_APPLY_LEVEL_2_KEY_UNLOCK));
 	ea8061v_write(lcd, SEQ_DCDC_SET, ARRAY_SIZE(SEQ_DCDC_SET));
 	ea8061v_write(lcd, SEQ_SOURCE_CONTROL, ARRAY_SIZE(SEQ_SOURCE_CONTROL));
@@ -787,6 +790,9 @@ static int ea8061v_ldi_init(struct lcd_info *lcd)
 	ea8061v_write(lcd, SEQ_ERR_FG_OUTPUT_SET2, ARRAY_SIZE(SEQ_ERR_FG_OUTPUT_SET2));
 	ea8061v_write(lcd, SEQ_DSI_ERR_OUT, ARRAY_SIZE(SEQ_DSI_ERR_OUT));
 	ea8061v_write(lcd, SEQ_APPLY_LEVEL_3_KEY_LOCK, ARRAY_SIZE(SEQ_APPLY_LEVEL_3_KEY_LOCK));
+
+	update_brightness(lcd, 1);
+
 	ea8061v_write(lcd, SEQ_SLEEP_OUT, ARRAY_SIZE(SEQ_SLEEP_OUT));
 	mdelay(120);
 
@@ -834,8 +840,14 @@ static int ea8061v_power_on(struct lcd_info *lcd)
 		goto err;
 	}
 
+	mutex_lock(&lcd->bl_lock);
 	lcd->ldi_enable = 1;
+	mutex_unlock(&lcd->bl_lock);
 
+	if (lcd->bl == 0&&lcd->auto_brightness!=6) /* Update_brightness not in HBM wakeup */ 
+	   lcd->need_update |= 1;
+
+	if (lcd->need_update)
 	update_brightness(lcd, 1);
 
 	dev_info(&lcd->ld->dev, "- %s\n", __func__);
@@ -849,7 +861,9 @@ static int ea8061v_power_off(struct lcd_info *lcd)
 
 	dev_info(&lcd->ld->dev, "+ %s\n", __func__);
 
+	mutex_lock(&lcd->bl_lock);
 	lcd->ldi_enable = 0;
+	mutex_unlock(&lcd->bl_lock);
 
 	ret = ea8061v_ldi_disable(lcd);
 
@@ -916,6 +930,8 @@ static int ea8061v_set_brightness(struct backlight_device *bd)
 			return -EINVAL;
 		}
 	}
+	else
+		lcd->need_update = 1;
 
 	return ret;
 }
@@ -1298,9 +1314,12 @@ static int ea8061v_probe(struct mipi_dsim_device *dsim)
 	mutex_init(&lcd->bl_lock);
 
 	ea8061v_read_id(lcd, lcd->id);
+	msleep(20);
 	ea8061v_update_seq(lcd);
 	ea8061v_read_coordinate(lcd);
+	msleep(20);
 	ea8061v_read_mtp(lcd, mtp_data);
+	msleep(20);
 	ea8061v_read_elvss(lcd, elvss_data);
 
 	pr_info("[OCTA] Panel ID : %x, %x, %x\n", lcd->id[0], lcd->id[1], lcd->id[2]);

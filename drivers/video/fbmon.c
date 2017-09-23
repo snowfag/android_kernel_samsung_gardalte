@@ -1210,7 +1210,7 @@ int fb_edid_add_monspecs(unsigned char *edid, struct fb_monspecs *specs)
 			/* Vendor Specific Data Block */
 			for (i = pos; i < pos + len; i++)
 				svsdb[++svsdb_n] = edid[i];
-			}
+		}
 
 		pos += len;
 	}

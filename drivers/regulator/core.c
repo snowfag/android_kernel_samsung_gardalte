@@ -749,7 +749,7 @@ static int suspend_prepare(struct regulator_dev *rdev, suspend_state_t state)
 static void print_constraints(struct regulator_dev *rdev)
 {
 	struct regulation_constraints *constraints = rdev->constraints;
-	char buf[80] = "";
+	char buf[160] = "";
 	int count = 0;
 	int ret;
 
@@ -1395,12 +1395,14 @@ void regulator_put(struct regulator *regulator)
 		device_remove_file(regulator->dev, &regulator->dev_attr);
 		kfree(regulator->dev_attr.attr.name);
 	}
+	mutex_lock(&rdev->mutex);
 	kfree(regulator->supply_name);
 	list_del(&regulator->list);
 	kfree(regulator);
 
 	rdev->open_count--;
 	rdev->exclusive = 0;
+	mutex_unlock(&rdev->mutex);
 
 	module_put(rdev->owner);
 	mutex_unlock(&regulator_list_mutex);
@@ -1664,6 +1666,23 @@ int regulator_force_disable(struct regulator *regulator)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(regulator_force_disable);
+
+#ifdef CONFIG_MFD_RT5033_RESET_WA
+int regulator_get_status(struct regulator *regulator)
+{
+	struct regulator_dev *rdev = regulator->rdev;
+	struct regulator_ops *ops = rdev->desc->ops;
+
+	int ret = 0;
+
+	if (ops->get_status) {
+		ret = ops->get_status(rdev);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(regulator_get_status);
+#endif
 
 static void regulator_disable_work(struct work_struct *work)
 {

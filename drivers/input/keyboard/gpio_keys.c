@@ -532,12 +532,12 @@ static int gpio_key_init_dvfs(struct gpio_button_data *bdata)
 }
 #endif
 
-static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
+static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata,
+				bool force)
 {
 	const struct gpio_keys_button *button = bdata->button;
 	struct input_dev *input = bdata->input;
 	unsigned int type = button->type ?: EV_KEY;
-	struct irq_desc *desc = irq_to_desc(gpio_to_irq(button->gpio));
 	int state = (gpio_get_value_cansleep(button->gpio) ? 1 : 0) ^ button->active_low;
 
 	pr_info("gpio-keys : code[%d], type[%d], state[%d]\n",
@@ -552,7 +552,7 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 		int report_state;
 		static int prev_state;
 
-		if (bdata->wakeup && !state) {
+		if (bdata->wakeup && !state && !force) {
 			input_event(input, type, button->code, !state);
 			input_sync(input);
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
@@ -562,18 +562,18 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 			if (button->code == KEY_POWER)
 				printk(KERN_DEBUG "keys:f PWR %d\n", !state);
 #endif
-	}
+		}
 
 		bdata->key_state = !!state;
 		bdata->wakeup = false;
 
-		report_state = irqd_is_wakeup_set(&desc->irq_data) ? 1 : !!state;
+		report_state = !!state;
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
 		printk(KERN_DEBUG"keys:code %d, state %d\n",
 			button->code, report_state);
 #endif
 		input_event(input, type, button->code, report_state);
-	input_sync(input);
+		input_sync(input);
 
 		if (button->code == KEY_POWER && prev_state != report_state) {
 			printk(KERN_DEBUG "keys:PWR %d\n", report_state);
@@ -595,7 +595,7 @@ static void gpio_keys_gpio_work_func(struct work_struct *work)
 	struct gpio_button_data *bdata =
 		container_of(work, struct gpio_button_data, work);
 
-	gpio_keys_gpio_report_event(bdata);
+	gpio_keys_gpio_report_event(bdata, false);
 }
 
 static void gpio_keys_gpio_timer(unsigned long _data)
@@ -805,10 +805,10 @@ static void flip_cover_work(struct work_struct *work)
 		__func__, second);
 
 
-	if(first == second && ddata->flip_cover != first) {
+	if(first == second) {
 		ddata->flip_cover = first;
 		input_report_switch(ddata->input,
-			SW_FLIP, ddata->flip_cover);
+			SW_LID, !ddata->flip_cover);
 		input_sync(ddata->input);
 	}
 }
@@ -827,7 +827,7 @@ static void flip_cover_work(struct work_struct *work)
 
 	ddata->flip_cover = gpio_flip_cover;
 	input_report_switch(ddata->input,
-	SW_FLIP, ddata->flip_cover);
+	SW_LID, !ddata->flip_cover);
 	input_sync(ddata->input);
 }
 #endif
@@ -1091,7 +1091,7 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 	input->dev.parent = &pdev->dev;
 #ifdef CONFIG_SENSORS_HALL
 	input->evbit[0] |= BIT_MASK(EV_SW);
-	input_set_capability(input, EV_SW, SW_FLIP);
+	input_set_capability(input, EV_SW, SW_LID);
 #endif
 	input->open = gpio_keys_open;
 	input->close = gpio_keys_close;
@@ -1158,7 +1158,7 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 
 	/* get current state of buttons */
 	for (i = 0; i < pdata->nbuttons; i++)
-		gpio_keys_gpio_report_event(&ddata->data[i]);
+		gpio_keys_gpio_report_event(&ddata->data[i], true);
 	input_sync(input);
 
 	device_init_wakeup(&pdev->dev, wakeup);
@@ -1226,8 +1226,10 @@ static int gpio_keys_suspend(struct device *dev)
 	if (device_may_wakeup(dev)) {
 		for (i = 0; i < ddata->n_buttons; i++) {
 			struct gpio_button_data *bdata = &ddata->data[i];
-			if (bdata->button->wakeup)
+			if (bdata->button->wakeup) {
 				enable_irq_wake(bdata->irq);
+				bdata->wakeup = true;
+			}
 		}
 #ifdef CONFIG_SENSORS_HALL
 		enable_irq_wake(ddata->irq_flip_cover);
@@ -1249,7 +1251,7 @@ static int gpio_keys_resume(struct device *dev)
 			disable_irq_wake(bdata->irq);
 
 		if (gpio_is_valid(bdata->button->gpio))
-			gpio_keys_gpio_report_event(bdata);
+			gpio_keys_gpio_report_event(bdata, true);
 	}
 	input_sync(ddata->input);
 #ifdef CONFIG_SENSORS_HALL

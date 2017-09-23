@@ -358,7 +358,7 @@ static irqreturn_t fimc_irq_handler(int irq, void *priv)
 
 #ifdef FIMC_PERF
 	fimc->end_time = sched_clock();
-	pr_info("OP-TIME: %llu\n", fimc->end_time - fimc->start_time);
+	dbg("OP-TIME: %llu", fimc->end_time - fimc->start_time);
 #endif
 
 	fimc_hw_clear_irq(fimc);
@@ -366,6 +366,9 @@ static irqreturn_t fimc_irq_handler(int irq, void *priv)
 	spin_lock(&fimc->slock);
 
 	if (test_and_clear_bit(ST_M2M_PEND, &fimc->state)) {
+		if (timer_pending(&fimc->op_timer))
+			del_timer(&fimc->op_timer);
+
 		if (test_and_clear_bit(ST_M2M_SUSPENDING, &fimc->state)) {
 			set_bit(ST_M2M_SUSPENDED, &fimc->state);
 			wake_up(&fimc->irq_queue);
@@ -380,7 +383,7 @@ static irqreturn_t fimc_irq_handler(int irq, void *priv)
 				ctx->state &= ~FIMC_CTX_SHUT;
 				wake_up(&fimc->irq_queue);
 			}
-		return IRQ_HANDLED;
+			return IRQ_HANDLED;
 		}
 	} else if (test_bit(ST_CAPT_PEND, &fimc->state)) {
 		int last_buf = test_bit(ST_CAPT_JPEG, &fimc->state) &&
@@ -419,7 +422,7 @@ int fimc_prepare_addr(struct fimc_ctx *ctx, struct vb2_buffer *vb,
 	if (vb == NULL || frame == NULL)
 		return -EINVAL;
 
-	pix_size = frame->width * frame->height;
+	pix_size = frame->f_width * frame->f_height;
 
 	dbg("memplanes= %d, colplanes= %d, pix_size= %d",
 		frame->fmt->memplanes, frame->fmt->colplanes, pix_size);
@@ -804,7 +807,7 @@ int fimc_ctrls_create(struct fimc_ctx *ctx)
 	if (variant->has_alpha)
 		ctrls->alpha = v4l2_ctrl_new_std(handler, &fimc_ctrl_ops,
 					V4L2_CID_ALPHA_COMPONENT,
-				    0, max_alpha, 1, 0);
+					0, max_alpha, 1, 0);
 	else
 		ctrls->alpha = NULL;
 
@@ -1043,7 +1046,7 @@ static int fimc_clk_get(struct fimc_dev *fimc)
 			clk_put(fimc->clock[i]);
 			fimc->clock[i] = NULL;
 			goto err;
-	}
+		}
 	}
 	return 0;
 err:
@@ -1079,7 +1082,7 @@ int fimc_m2m_suspend(struct fimc_dev *fimc)
 	spin_lock_irqsave(&fimc->slock, flags);
 	if (!fimc_m2m_pending(fimc)) {
 		spin_unlock_irqrestore(&fimc->slock, flags);
-	return 0;
+		return 0;
 	}
 	clear_bit(ST_M2M_SUSPENDED, &fimc->state);
 	set_bit(ST_M2M_SUSPENDING, &fimc->state);
@@ -1117,7 +1120,6 @@ int fimc_runtime_resume(struct device *dev)
 	/* Enable clocks and perform basic initalization */
 	clk_enable(fimc->clock[CLK_GATE]);
 	fimc->vb2->resume(fimc->alloc_ctx);
-	fimc_hw_reset(fimc);
 
 	/* Resume the capture or mem-to-mem device */
 	if (fimc_capture_busy(fimc))
@@ -1178,7 +1180,6 @@ static int fimc_resume(struct device *dev)
 		spin_unlock_irqrestore(&fimc->slock, flags);
 		return 0;
 	}
-	fimc_hw_reset(fimc);
 	spin_unlock_irqrestore(&fimc->slock, flags);
 
 	if (fimc_capture_busy(fimc))
@@ -1202,11 +1203,12 @@ static int fimc_suspend(struct device *dev)
 }
 #endif /* CONFIG_PM_SLEEP */
 
-static void s5p_fimc_dump_registers(struct fimc_dev *fimc)
+void s5p_fimc_dump_registers(struct fimc_dev *fimc)
 {
-	pr_err("dumping registers\n");
+	pr_err("fimc%d dumping registers\n", fimc->id);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			fimc->regs, 0x0350, false);
+	pr_err("End of fimc sfr dump\n");
 }
 
 
@@ -1290,7 +1292,7 @@ static int fimc_probe(struct platform_device *pdev)
 	if (samsung_rev() >= EXYNOS4412_REV_2_0)
 		clk_set_rate(fimc->clock[CLK_BUS], 176000000UL);
 	else
-	clk_set_rate(fimc->clock[CLK_BUS], drv_data->lclk_frequency);
+		clk_set_rate(fimc->clock[CLK_BUS], drv_data->lclk_frequency);
 	clk_enable(fimc->clock[CLK_BUS]);
 	clk_put(srclk);
 
@@ -1405,7 +1407,7 @@ static struct fimc_variant fimc2_variant_s5p = {
 	.hor_offs_align	 = 8,
 	.min_vsize_align = 16,
 	.out_buf_count	 = 4,
-	.pix_limit = &s5p_pix_limit[1],
+	.pix_limit	 = &s5p_pix_limit[1],
 };
 
 static struct fimc_variant fimc0_variant_s5pv210 = {

@@ -59,14 +59,14 @@ static int fimc_capture_hw_init(struct fimc_dev *fimc)
 	fimc_hw_set_enable_lastend(fimc);
 
 	if (!fimc_fmt_is_interleaved(ff->fmt->color))
-	ret = fimc_set_scaler_info(ctx);
+		ret = fimc_set_scaler_info(ctx);
 	if (!ret) {
 		fimc_hw_set_input_path(ctx);
 		if (!fimc_fmt_is_interleaved(ff->fmt->color)) {
 			fimc_hw_set_camera_source(fimc, &sensor->pdata);
 			fimc_hw_set_camera_offset(fimc, &ctx->s_frame);
-		fimc_hw_set_prescaler(ctx);
-		fimc_hw_set_mainscaler(ctx);
+			fimc_hw_set_prescaler(ctx);
+			fimc_hw_set_mainscaler(ctx);
 		} else {
 			fimc_hw_set_scaler_bypass(ctx);
 		}
@@ -171,17 +171,17 @@ static int fimc_capture_config_update(struct fimc_ctx *ctx)
 	if (ret)
 		return ret;
 
-		fimc_hw_set_prescaler(ctx);
-		fimc_hw_set_mainscaler(ctx);
-		fimc_hw_set_target_format(ctx);
-		fimc_hw_set_rotation(ctx);
+	fimc_hw_set_prescaler(ctx);
+	fimc_hw_set_mainscaler(ctx);
+	fimc_hw_set_target_format(ctx);
+	fimc_hw_set_rotation(ctx);
 	fimc_hw_set_effect(ctx);
-		fimc_prepare_dma_offset(ctx, &ctx->d_frame);
-		fimc_hw_set_out_dma(ctx);
-		if (fimc->variant->has_alpha)
-			fimc_hw_set_rgb_alpha(ctx);
+	fimc_prepare_dma_offset(ctx, &ctx->d_frame);
+	fimc_hw_set_out_dma(ctx);
+	if (fimc->variant->has_alpha)
+		fimc_hw_set_rgb_alpha(ctx);
 
-		clear_bit(ST_CAPT_APPLY_CFG, &fimc->state);
+	clear_bit(ST_CAPT_APPLY_CFG, &fimc->state);
 	return ret;
 }
 
@@ -851,33 +851,33 @@ static int fimc_pipeline_try_format(struct fimc_ctx *ctx,
 		mf->code = tfmt->code = ffmt->mbus_code;
 
 		if (!is) {
-		ret = v4l2_subdev_call(sd, pad, set_fmt, NULL, &sfmt);
-		if (ret)
-			return ret;
-		if (mf->code != tfmt->code) {
-			mf->code = 0;
-			continue;
-		}
+			ret = v4l2_subdev_call(sd, pad, set_fmt, NULL, &sfmt);
+			if (ret)
+				return ret;
+			if (mf->code != tfmt->code) {
+				mf->code = 0;
+				continue;
+			}
 			if (mf->width != tfmt->width ||
 						mf->height != tfmt->height) {
-			u32 fcc = ffmt->fourcc;
-			tfmt->width  = mf->width;
-			tfmt->height = mf->height;
-			ffmt = fimc_capture_try_format(ctx,
-					       &tfmt->width, &tfmt->height,
-					       NULL, &fcc, FIMC_SD_PAD_SOURCE);
-			if (ffmt && ffmt->mbus_code)
-				mf->code = ffmt->mbus_code;
-			if (mf->width != tfmt->width ||
-			    mf->height != tfmt->height)
-				continue;
-			tfmt->code = mf->code;
-		}
-		if (csis)
+				u32 fcc = ffmt->fourcc;
+				tfmt->width  = mf->width;
+				tfmt->height = mf->height;
+				ffmt = fimc_capture_try_format(ctx,
+					&tfmt->width, &tfmt->height,
+					NULL, &fcc, FIMC_SD_PAD_SOURCE);
+				if (ffmt && ffmt->mbus_code)
+					mf->code = ffmt->mbus_code;
+				if (mf->width != tfmt->width ||
+				    mf->height != tfmt->height)
+					continue;
+				tfmt->code = mf->code;
+			}
+			if (csis)
 				ret = v4l2_subdev_call(csis, pad,
 							set_fmt, NULL, &sfmt);
 
-		if (mf->code == tfmt->code &&
+			if (mf->code == tfmt->code &&
 			    mf->width == tfmt->width &&
 			    mf->height == tfmt->height)
 				break;
@@ -905,7 +905,7 @@ static int fimc_pipeline_try_format(struct fimc_ctx *ctx,
 			if (ret)
 				return ret;
 			break;
-	}
+		}
 	}
 
 	if (fmt_id && ffmt)
@@ -948,14 +948,14 @@ static int fimc_cap_try_fmt_mplane(struct file *file, void *fh,
 		goto err_null;
 
 	if (!fimc->vid_cap.user_subdev_api) {
-		mf.width  = pix->width;
+		mf.width = pix->width;
 		mf.height = pix->height;
-		mf.code   = ffmt->mbus_code;
+		mf.code = ffmt->mbus_code;
 		fimc_md_graph_lock(fimc);
 		fimc_pipeline_try_format(ctx, &mf, &ffmt, false);
 		fimc_md_graph_unlock(fimc);
-		pix->width	 = mf.width;
-		pix->height	 = mf.height;
+		pix->width = mf.width;
+		pix->height = mf.height;
 		if (ffmt)
 			pix->pixelformat = ffmt->fourcc;
 		else
@@ -1033,7 +1033,7 @@ static int fimc_capture_set_format(struct fimc_dev *fimc, struct v4l2_format *f)
 	fimc_adjust_mplane_format(ff->fmt, pix->width, pix->height, pix);
 
 	if (fimc_fmt_is_interleaved(ff->fmt->color)) {
-	for (i = 0; i < ff->fmt->colplanes; i++)
+		for (i = 0; i < ff->fmt->colplanes; i++)
 			ff->payload[i] = ff->fmt->depth[i];
 	} else {
 		for (i = 0; i < ff->fmt->memplanes; i++)
@@ -1179,7 +1179,7 @@ static int fimc_cap_streamon(struct file *file, void *priv,
 		if (ret < 0) {
 			media_entity_pipeline_stop(&sd->entity);
 			return ret;
-	}
+		}
 	}
 	return vb2_streamon(&fimc->vid_cap.vbq, type);
 }
@@ -1563,9 +1563,9 @@ static int fimc_subdev_get_crop(struct v4l2_subdev *sd,
 		&ctx->s_frame : &ctx->d_frame;
 
 	mutex_lock(&fimc->lock);
-	r->left	  = ff->offs_h;
-	r->top	  = ff->offs_v;
-	r->width  = ff->width;
+	r->left = ff->offs_h;
+	r->top = ff->offs_v;
+	r->width = ff->width;
 	r->height = ff->height;
 	mutex_unlock(&fimc->lock);
 

@@ -484,7 +484,7 @@ static int exynos_spdif_cfg_gpio(struct platform_device *pdev)
 	else if (soc_is_exynos4210() || soc_is_exynos4212() ||
 		 soc_is_exynos4412() || soc_is_exynos4415() ||
 		 soc_is_exynos3470())
-	s3c_gpio_cfgpin_range(EXYNOS4_GPC1(0), 2, S3C_GPIO_SFN(4));
+		s3c_gpio_cfgpin_range(EXYNOS4_GPC1(0), 2, S3C_GPIO_SFN(4));
 	else if (soc_is_exynos5260()) {
 #ifdef CONFIG_MACH_XYREF5260
 		s3c_gpio_cfgpin_range(EXYNOS5260_GPB0(2), 1, S3C_GPIO_SFN(4));

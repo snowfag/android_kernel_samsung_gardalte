@@ -750,7 +750,7 @@ acm_unbind(struct usb_configuration *c, struct usb_function *f)
 		usb_free_descriptors(f->ss_descriptors);
 	usb_free_descriptors(f->descriptors);
     if ( acm->notify_req )
-	gs_free_req(acm->notify, acm->notify_req);
+		gs_free_req(acm->notify, acm->notify_req);
 
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	kfree(acm->port.func.name);

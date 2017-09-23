@@ -592,7 +592,7 @@ static int hscd_probe(struct i2c_client *client,
 		goto exit;
 	}
 	if (pdata->alps_magnetic_power != NULL)
-	alps_magnetic_vddpower = pdata->alps_magnetic_power;
+		alps_magnetic_vddpower = pdata->alps_magnetic_power;
 
 	/* turn on the power */
 	hscd_power_on();
@@ -674,8 +674,10 @@ static int hscd_resume(struct i2c_client *client)
 	alps_info("is called\n");
 
 	atomic_set(&flagSuspend, 0);
-	if (atomic_read(&flag_enable))
-		hscd_activate(0, atomic_read(&flag_enable), atomic_read(&delay));
+	if (atomic_read(&flag_enable)) {
+		atomic_set(&flag_enable, 0);
+		hscd_activate(1, 1, atomic_read(&delay));
+	}
 
 	return 0;
 }

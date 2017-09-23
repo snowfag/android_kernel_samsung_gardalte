@@ -1212,7 +1212,7 @@ static void __init exynos4_map_io(void)
 		if (samsung_rev() == EXYNOS4210_REV_0)
 			iotable_init(exynos4210_iodesc_rev_0,
 				ARRAY_SIZE(exynos4210_iodesc_rev_0));
-	else
+		else
 			iotable_init(exynos4210_iodesc_rev_1,
 				ARRAY_SIZE(exynos4210_iodesc_rev_1));
 	} else if (soc_is_exynos4415()) {
@@ -1232,7 +1232,7 @@ static void __init exynos4_map_io(void)
 	exynos4_default_sdhci3();
 
 	if (soc_is_exynos4210())
-	s3c_adc_setname("samsung-adc-v3");
+		s3c_adc_setname("samsung-adc-v3");
 	else if (soc_is_exynos4415() || soc_is_exynos3470())
 		s3c_adc_setname("samsung-adc-v5");
 	else
@@ -1258,7 +1258,7 @@ static void __init exynos4_map_io(void)
 	if (soc_is_exynos4415())
 		s5p_fb_setname(1, "exynos4-fb");
 	else
-	s5p_fb_setname(0, "exynos4-fb");
+		s5p_fb_setname(0, "exynos4-fb");
 	s5p_hdmi_setname("exynos4-hdmi");
 }
 
@@ -1272,7 +1272,7 @@ int exynos_is_finish_map_io(void)
 static void __init exynos5_map_io(void)
 {
 	if (!soc_is_exynos5260())
-	iotable_init(exynos5_iodesc, ARRAY_SIZE(exynos5_iodesc));
+		iotable_init(exynos5_iodesc, ARRAY_SIZE(exynos5_iodesc));
 
 	if (soc_is_exynos5250())
 		iotable_init(exynos5250_iodesc, ARRAY_SIZE(exynos5250_iodesc));
@@ -1347,8 +1347,8 @@ static void __init exynos4_init_clocks(int xtal)
 		exynos3470_setup_clocks();
 	} else {
 #ifndef CONFIG_SOC_EXYNOS4415
-	exynos4_register_clocks();
-	exynos4_setup_clocks();
+		exynos4_register_clocks();
+		exynos4_setup_clocks();
 #endif
 	}
 #ifdef CONFIG_SOUND
@@ -1490,7 +1490,7 @@ static int combiner_set_affinity(struct irq_data *d,
 			cpumask_and(&target_affinity,
 				    &target_affinity,
 				    dest);
-	else
+		else
 			cpumask_and(&target_affinity,
 				    &target_affinity,
 				    &combiner_data[combiner_nr].affinity[i]);
@@ -1529,7 +1529,7 @@ static void __init combiner_init(unsigned int combiner_nr, void __iomem *base,
 		cpumask_setall(&combiner_data[combiner_nr].affinity[i]);
 
 	if ((combiner_nr % 4) == 0) {
-	/* Disable all interrupts */
+		/* Disable all interrupts */
 
 		__raw_writel(IRQ_MSK(32), base + COMBINER_ENABLE_CLEAR);
 
@@ -1724,11 +1724,11 @@ static int __init exynos4_l2x0_cache_init(void)
 			if (samsung_rev() >= EXYNOS4412_REV_1_0
 							|| soc_is_exynos4415())
 				l2x0_saved_regs.prefetch_ctrl = 0x71000007;
-		else
+			else
 				l2x0_saved_regs.prefetch_ctrl = 0x30000007;
 		} else {
 			l2x0_saved_regs.data_latency = 0x110;
-		l2x0_saved_regs.prefetch_ctrl = 0x30000007;
+			l2x0_saved_regs.prefetch_ctrl = 0x30000007;
 		}
 
 		l2x0_saved_regs.pwr_ctrl =
@@ -2121,7 +2121,7 @@ static int __init exynos_init_irq_eint(void)
 		exynos_eint_fltcon_config(1, 1, 0);
 		irq_set_chained_handler(EXYNOS5260_IRQ_EINT16_31, exynos_irq_demux_eint16_31);
 	} else {
-	irq_set_chained_handler(EXYNOS_IRQ_EINT16_31, exynos_irq_demux_eint16_31);
+		irq_set_chained_handler(EXYNOS_IRQ_EINT16_31, exynos_irq_demux_eint16_31);
 	}
 
 	for (irq = 0 ; irq <= 15 ; irq++) {

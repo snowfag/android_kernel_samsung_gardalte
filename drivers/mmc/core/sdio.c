@@ -744,12 +744,12 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
 		memcpy(&card->cccr, host->embedded_sdio_data.cccr, sizeof(struct sdio_cccr));
 	else {
 #endif
-	/*
-	 * Read the common registers.
-	 */
-	err = sdio_read_cccr(card, ocr);
-	if (err)
-		goto remove;
+		/*
+		 * Read the common registers.
+		 */
+		err = sdio_read_cccr(card,  ocr);
+		if (err)
+			goto remove;
 #ifdef CONFIG_MMC_EMBEDDED_SDIO
 	}
 #endif
@@ -759,12 +759,12 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
 		memcpy(&card->cis, host->embedded_sdio_data.cis, sizeof(struct sdio_cis));
 	else {
 #endif
-	/*
-	 * Read the common CIS tuples.
-	 */
-	err = sdio_read_common_cis(card);
-	if (err)
-		goto remove;
+		/*
+		 * Read the common CIS tuples.
+		 */
+		err = sdio_read_common_cis(card);
+		if (err)
+			goto remove;
 #ifdef CONFIG_MMC_EMBEDDED_SDIO
 	}
 #endif
@@ -1194,9 +1194,9 @@ int mmc_attach_sdio(struct mmc_host *host)
 			tmp->device = card->cis.device;
 		} else {
 #endif
-		err = sdio_init_func(host->card, i + 1);
-		if (err)
-			goto remove;
+			err = sdio_init_func(host->card, i + 1);
+			if (err)
+				goto remove;
 #ifdef CONFIG_MMC_EMBEDDED_SDIO
 		}
 #endif

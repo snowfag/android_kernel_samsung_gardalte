@@ -41,7 +41,9 @@ static char *secmem_regions[] = {
 	"mfc_sh",	/* 0 */
 	"g2d_wfd",	/* 1 */
 	"video",	/* 2 */
+#ifndef CONFIG_SOC_EXYNOS3470
 	"mfc_input",	/* 3 */
+#endif
 	"mfc_fw",	/* 4 */
 	"sectbl",	/* 5 */
 	NULL

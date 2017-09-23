@@ -175,7 +175,7 @@ static void cpufreq_stats_free_table(unsigned int cpu)
 		pr_debug("%s: Free stat table\n", __func__);
 		kfree(stat->time_in_state);
 		kfree(stat);
-	per_cpu(cpufreq_stats_table, cpu) = NULL;
+		per_cpu(cpufreq_stats_table, cpu) = NULL;
 	}
 }
 

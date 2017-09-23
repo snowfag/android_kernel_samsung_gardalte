@@ -194,7 +194,7 @@ struct clk *__clk_get_parent(struct clk *clk)
 	if (clk->ops && clk->ops->get_parent)
 		return clk->ops->get_parent(clk);
 	else
-	return clk->parent;
+		return clk->parent;
 }
 
 struct clk *clk_get_parent(struct clk *clk)

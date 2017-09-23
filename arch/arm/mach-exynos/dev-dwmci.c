@@ -380,8 +380,8 @@ void exynos_unregister_notifier(void *data)
 }
 
 static struct dw_mci_board exynos4_dwmci_pdata = {
-	.num_slots			= 1,
-	.quirks				= DW_MCI_QUIRK_BROKEN_CARD_DETECTION,
+	.num_slots		= 1,
+	.quirks			= DW_MCI_QUIRK_BROKEN_CARD_DETECTION,
 	.bus_hz			= 100 * 1000 * 1000,
 	.detect_delay_ms	= 200,
 	.init			= exynos_dwmci_init,
@@ -543,8 +543,8 @@ void __init exynos_dwmci_set_platdata(struct dw_mci_board *pd, u32 slot_id)
 
 	if ((soc_is_exynos4210()) || soc_is_exynos4212() ||
 		soc_is_exynos4412()) {
-	npd = s3c_set_platdata(pd, sizeof(struct dw_mci_board),
-			&exynos4_device_dwmci);
+		npd = s3c_set_platdata(pd, sizeof(struct dw_mci_board),
+				&exynos4_device_dwmci);
 	} else if (soc_is_exynos5250() || soc_is_exynos5410() ||
 			soc_is_exynos5420() || soc_is_exynos5260()) {
 		if (slot_id < ARRAY_SIZE(exynos5_dwmci_devs))

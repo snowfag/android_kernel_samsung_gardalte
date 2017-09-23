@@ -26,8 +26,8 @@
 #include "i2s-regs.h"
 #include "srp_alp/srp_alp.h"
 
-#define ST_RUNNING		(1<<0)
-#define ST_OPENED		(1<<1)
+#define ST_RUNNING	(1<<0)
+#define ST_OPENED	(1<<1)
 
 #ifdef CONFIG_SND_SAMSUNG_USE_IDMA_DRAM
 #define DMA_SRAM	0
@@ -71,9 +71,9 @@ struct idma_ctrl {
 };
 
 static struct idma_info {
-	spinlock_t	lock;
-	void		 __iomem  *regs;
-	dma_addr_t	lp_tx_addr;
+	spinlock_t		lock;
+	void __iomem		*regs;
+	dma_addr_t		lp_tx_addr;
 #ifdef CONFIG_SND_SAMSUNG_USE_IDMA_DRAM
 	void			*dma_area;
 	struct snd_dma_buffer	sram_buf;
@@ -389,16 +389,16 @@ static irqreturn_t iis_irq(int irqno, void *dev_id)
 		writel(iisahb, idma.regs + I2SAHB);
 
 		if (prtd->state & ST_RUNNING) {
-		addr = readl(idma.regs + I2SLVL0ADDR) - idma.lp_tx_addr;
-		addr += prtd->periodsz;
-		addr %= (prtd->end - prtd->start);
-		addr += idma.lp_tx_addr;
+			addr = readl(idma.regs + I2SLVL0ADDR) - idma.lp_tx_addr;
+			addr += prtd->periodsz;
+			addr %= (prtd->end - prtd->start);
+			addr += idma.lp_tx_addr;
 
-		writel(addr, idma.regs + I2SLVL0ADDR);
+			writel(addr, idma.regs + I2SLVL0ADDR);
 
-		if (prtd->cb)
-			prtd->cb(prtd->token, prtd->period);
-	}
+			if (prtd->cb)
+				prtd->cb(prtd->token, prtd->period);
+		}
 	}
 
 	return IRQ_HANDLED;

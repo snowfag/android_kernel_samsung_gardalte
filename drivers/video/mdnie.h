@@ -38,7 +38,21 @@ enum ACCESSIBILITY {
 	NEGATIVE,
 	COLOR_BLIND,
 	SCREEN_CURTAIN,
+	GRAYSCALE,
+	GRAYSCALE_NEGATIVE,
 	ACCESSIBILITY_MAX,
+};
+
+enum HBM {
+	HBM_OFF,
+	HBM_ON,
+	HBM_MAX,
+};
+
+enum OUTDOOR {
+	OUTDOOR,
+	OUTDOOR_TEXT,
+	OUTDOOR_MAX,
 };
 
 struct mdnie_tuning_info {
@@ -58,10 +72,13 @@ struct mdnie_info {
 
 	enum SCENARIO scenario;
 	enum MODE mode;
- 	enum BYPASS bypass;
+	enum BYPASS bypass;
+	enum HBM		hbm;
+
 	unsigned int tuning;
 	unsigned int accessibility;
 	unsigned int color_correction;
+	unsigned int auto_brightness;
 	char path[50];
 
 	struct notifier_block fb_notif;

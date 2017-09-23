@@ -114,7 +114,7 @@ void fimc_hw_set_target_format(struct fimc_ctx *ctx)
 	struct fimc_frame *frame = &ctx->d_frame;
 
 	dbg("w= %d, h= %d color: %d", frame->width,
-		frame->height, frame->fmt->color);
+	    frame->height, frame->fmt->color);
 
 	cfg = readl(dev->regs + FIMC_REG_CITRGFMT);
 	cfg &= ~(FIMC_REG_CITRGFMT_FMT_MASK | FIMC_REG_CITRGFMT_HSIZE_MASK |
@@ -147,7 +147,7 @@ void fimc_hw_set_target_format(struct fimc_ctx *ctx)
 	cfg = readl(dev->regs + FIMC_REG_CITAREA);
 	cfg &= ~FIMC_REG_CITAREA_MASK;
 	if (!fimc_fmt_is_interleaved(frame->fmt->color))
-	cfg |= (frame->width * frame->height);
+		cfg |= (frame->width * frame->height);
 	else
 		cfg |= 0xC00000;
 
@@ -336,7 +336,7 @@ void fimc_hw_set_mainscaler(struct fimc_ctx *ctx)
 	u32 cfg;
 
 	dbg("main_hratio= 0x%X  main_vratio= 0x%X",
-		sc->main_hratio, sc->main_vratio);
+	    sc->main_hratio, sc->main_vratio);
 
 	fimc_hw_set_scaler(ctx);
 

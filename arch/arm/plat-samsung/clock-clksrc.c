@@ -80,13 +80,13 @@ static int s3c_setparent_clksrc(struct clk *clk, struct clk *parent)
 		return -EINVAL;
 
 
-		clk->parent = parent;
+	clk->parent = parent;
 
-		clksrc &= ~mask;
+	clksrc &= ~mask;
 	clk->orig_src = src_nr << sclk->reg_src.shift;
-		clksrc |= src_nr << sclk->reg_src.shift;
+	clksrc |= src_nr << sclk->reg_src.shift;
 
-		__raw_writel(clksrc, sclk->reg_src.reg);
+	__raw_writel(clksrc, sclk->reg_src.reg);
 
 	if (sclk->reg_src_stat.reg) {
 		mask = bit_mask(sclk->reg_src_stat.shift,

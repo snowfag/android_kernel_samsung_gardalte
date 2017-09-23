@@ -853,7 +853,7 @@ int mmc_sd_setup_card(struct mmc_host *host, struct mmc_card *card,
 		 */
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
 		for (retries = 1; retries <= 3; retries++) {
-		err = mmc_read_switch(card);
+			err = mmc_read_switch(card);
 			if (!err) {
 				if (retries > 1) {
 					printk(KERN_WARNING
@@ -1100,7 +1100,7 @@ static void mmc_sd_detect(struct mmc_host *host)
 
 	BUG_ON(!host);
 	BUG_ON(!host->card);
-
+       
 	mmc_claim_host(host);
 
 	/*
@@ -1172,7 +1172,7 @@ static int mmc_sd_resume(struct mmc_host *host)
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
 	retries = 5;
 	while (retries) {
-	err = mmc_sd_init_card(host, host->ocr, host->card);
+		err = mmc_sd_init_card(host, host->ocr, host->card);
 
 		if (err) {
 			printk(KERN_ERR "%s: Re-init card rc = %d (retries = %d)\n",

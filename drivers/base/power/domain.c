@@ -1370,13 +1370,13 @@ int pm_genpd_remove_device(struct generic_pm_domain *genpd,
 	spin_lock_irq(&dev->power.lock);
 	dev->pm_domain = NULL;
 	pdd = dev->power.subsys_data->domain_data;
-		list_del_init(&pdd->list_node);
+	list_del_init(&pdd->list_node);
 	dev->power.subsys_data->domain_data = NULL;
 	spin_unlock_irq(&dev->power.lock);
 
 	gpd_data = to_gpd_data(pdd);
 	mutex_lock(&gpd_data->lock);
-		pdd->dev = NULL;
+	pdd->dev = NULL;
 	mutex_unlock(&gpd_data->lock);
 
 	genpd_release_lock(genpd);

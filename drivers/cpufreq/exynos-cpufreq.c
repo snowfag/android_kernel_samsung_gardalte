@@ -208,7 +208,7 @@ static int exynos_cpufreq_scale(unsigned int target_freq,
 
 	/* Update policy current frequency */
 	for_each_cpu(freqs.cpu, policy->cpus)
-	cpufreq_notify_transition(&freqs, CPUFREQ_PRECHANGE);
+		cpufreq_notify_transition(&freqs, CPUFREQ_PRECHANGE);
 
 	/* When the new frequency is higher than current frequency */
 	if ((freqs.new > freqs.old) && !safe_arm_volt) {
@@ -218,7 +218,7 @@ static int exynos_cpufreq_scale(unsigned int target_freq,
 			pr_err("%s: failed to set cpu voltage to %d\n",
 				__func__, arm_volt);
 			return ret;
-	}
+		}
 
 		if (exynos_info->abb_table)
 			exynos_set_abb(ID_ARM, exynos_info->abb_table[new_index]);
@@ -229,7 +229,7 @@ static int exynos_cpufreq_scale(unsigned int target_freq,
 
 	if (safe_arm_volt) {
 		ret = regulator_set_voltage(arm_regulator, safe_arm_volt,
-				      safe_arm_volt);
+				safe_arm_volt);
 		if (ret) {
 			pr_err("%s: failed to set cpu voltage to %d\n",
 				__func__, safe_arm_volt);
@@ -265,7 +265,7 @@ static int exynos_cpufreq_scale(unsigned int target_freq,
 #endif
 
 	for_each_cpu(freqs.cpu, policy->cpus)
-	cpufreq_notify_transition(&freqs, CPUFREQ_POSTCHANGE);
+		cpufreq_notify_transition(&freqs, CPUFREQ_POSTCHANGE);
 
 	/* When the new frequency is lower than current frequency */
 	if ((freqs.new < freqs.old) ||
@@ -504,7 +504,7 @@ static int exynos_cpufreq_pm_notifier(struct notifier_block *notifier,
 					continue;
 				if (freq_table[i].frequency == abb_freq) {
 					exynos_set_abb(ID_ARM, exynos_info->abb_table[i]);
-		break;
+					break;
 				}
 			}
 		}
@@ -530,7 +530,7 @@ static int exynos_cpufreq_pm_notifier(struct notifier_block *notifier,
 			}
 		}
 
-			mutex_lock(&cpufreq_lock);
+		mutex_lock(&cpufreq_lock);
 		exynos_cpufreq_disable = false;
 		mutex_unlock(&cpufreq_lock);
 
@@ -1072,7 +1072,7 @@ err_cpufreq:
 	pm_qos_remove_notifier(PM_QOS_CPU_FREQ_MAX, &exynos_max_qos_notifier);
 	unregister_reboot_notifier(&exynos_cpufreq_reboot_notifier);
 	unregister_pm_notifier(&exynos_cpufreq_nb);
-		regulator_put(arm_regulator);
+	regulator_put(arm_regulator);
 err_vdd_arm:
 err_init_cpufreq:
 	kfree(exynos_info);

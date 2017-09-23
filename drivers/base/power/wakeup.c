@@ -726,12 +726,12 @@ bool pm_get_wakeup_count(unsigned int *count, bool block)
 	if (block) {
 		DEFINE_WAIT(wait);
 
-	for (;;) {
+		for (;;) {
 			prepare_to_wait(&wakeup_count_wait_queue, &wait,
 					TASK_INTERRUPTIBLE);
-		split_counters(&cnt, &inpr);
-		if (inpr == 0 || signal_pending(current))
-			break;
+			split_counters(&cnt, &inpr);
+			if (inpr == 0 || signal_pending(current))
+				break;
 
 			schedule();
 		}

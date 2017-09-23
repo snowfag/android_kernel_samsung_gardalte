@@ -319,12 +319,12 @@ static int spdif_suspend(struct snd_soc_dai *cpu_dai)
 	dev_dbg(spdif->dev, "Entered %s\n", __func__);
 
 	if (cpu_dai->active) {
-	spdif->saved_clkcon = readl(spdif->regs	+ CLKCON) & CLKCTL_MASK;
-	spdif->saved_con = readl(spdif->regs + CON) & CON_MASK;
-	spdif->saved_cstas = readl(spdif->regs + CSTAS) & CSTAS_MASK;
+		spdif->saved_clkcon = readl(spdif->regs	+ CLKCON) & CLKCTL_MASK;
+		spdif->saved_con = readl(spdif->regs + CON) & CON_MASK;
+		spdif->saved_cstas = readl(spdif->regs + CSTAS) & CSTAS_MASK;
 
-	writel(con | CON_SW_RESET, spdif->regs + CON);
-	cpu_relax();
+		writel(con | CON_SW_RESET, spdif->regs + CON);
+		cpu_relax();
 
 		pm_runtime_put_sync(spdif->dev);
 	}
@@ -341,9 +341,9 @@ static int spdif_resume(struct snd_soc_dai *cpu_dai)
 	if (cpu_dai->active) {
 		pm_runtime_get_sync(spdif->dev);
 
-	writel(spdif->saved_clkcon, spdif->regs	+ CLKCON);
-	writel(spdif->saved_con, spdif->regs + CON);
-	writel(spdif->saved_cstas, spdif->regs + CSTAS);
+		writel(spdif->saved_clkcon, spdif->regs	+ CLKCON);
+		writel(spdif->saved_con, spdif->regs + CON);
+		writel(spdif->saved_cstas, spdif->regs + CSTAS);
 	}
 
 	return 0;

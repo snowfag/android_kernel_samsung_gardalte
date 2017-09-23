@@ -274,7 +274,7 @@ static void sdio_release_func(struct device *dev)
 	 */
 	if (!func->card->host->embedded_sdio_data.funcs)
 #endif
-	sdio_free_func_cis(func);
+		sdio_free_func_cis(func);
 
 	if (func->info)
 		kfree(func->info);

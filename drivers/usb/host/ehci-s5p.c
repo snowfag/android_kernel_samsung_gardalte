@@ -677,8 +677,8 @@ static void s5p_ehci_shutdown(struct platform_device *pdev)
 }
 
 static const struct dev_pm_ops s5p_ehci_pm_ops = {
-	.suspend	= s5p_ehci_suspend,
-	.resume		= s5p_ehci_resume,
+	.suspend		= s5p_ehci_suspend,
+	.resume			= s5p_ehci_resume,
 	.runtime_suspend	= s5p_ehci_runtime_suspend,
 	.runtime_resume		= s5p_ehci_runtime_resume,
 };
@@ -690,7 +690,7 @@ static struct platform_driver s5p_ehci_driver = {
 	.driver = {
 		.name	= "s5p-ehci",
 		.owner	= THIS_MODULE,
-		.pm	= &s5p_ehci_pm_ops,
+		.pm = &s5p_ehci_pm_ops,
 	}
 };
 

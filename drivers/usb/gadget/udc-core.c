@@ -355,7 +355,7 @@ found:
 		 * pullup before userspace is ready.
 		 */
 #if !defined(CONFIG_USB_G_ANDROID)
-		usb_gadget_connect(udc->gadget);
+		 usb_gadget_connect(udc->gadget);
 #endif
 	} else {
 

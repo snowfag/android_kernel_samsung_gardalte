@@ -238,8 +238,8 @@ static ssize_t ashmem_read(struct file *file, char __user *buf,
 	 */
 	ret = asma->file->f_op->read(asma->file, buf, len, pos);
 	if (ret >= 0) {
-	/** Update backing file pos, since f_ops->read() doesn't */
-	asma->file->f_pos = *pos;
+		/** Update backing file pos, since f_ops->read() doesn't */
+		asma->file->f_pos = *pos;
 	}
 	return ret;
 
@@ -325,9 +325,9 @@ static int ashmem_mmap(struct file *file, struct vm_area_struct *vma)
 	if (vma->vm_flags & VM_SHARED)
 		shmem_set_file(vma, asma->file);
 	else {
-	if (vma->vm_file)
-		fput(vma->vm_file);
-	vma->vm_file = asma->file;
+		if (vma->vm_file)
+			fput(vma->vm_file);
+		vma->vm_file = asma->file;
 	}
 	vma->vm_flags |= VM_CAN_NONLINEAR;
 
@@ -361,7 +361,9 @@ static int ashmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	if (!sc->nr_to_scan)
 		return lru_count;
 
-	mutex_lock(&ashmem_mutex);
+	if (!mutex_trylock(&ashmem_mutex))
+		return -1;
+
 	list_for_each_entry_safe(range, next, &ashmem_lru_list, lru) {
 		struct inode *inode = range->asma->file->f_dentry->d_inode;
 		loff_t start = range->pgstart * PAGE_SIZE;

@@ -80,7 +80,7 @@ static struct regulator_bulk_data supplies[] = {
 	}, {
 		.supply		= "dig_28",	/* digital power 2 - 2.8v */
 	}, {
-		.supply	= "a_sensor",	/* analog power */
+		.supply		= "a_sensor",	/* analog power */
 	}, {
 		.supply		= "dig_12",	/* digital power 3 - 1.2v */
 	},
@@ -269,7 +269,7 @@ int m5mols_read_reg(struct v4l2_subdev *sd,
 		return ret;
 	}
 
-		*val = m5mols_swap_byte(&rbuf[1], size);
+	*val = m5mols_swap_byte(&rbuf[1], size);
 
 	usleep_range(15000, 20000);	/* must be for stabilization */
 
@@ -312,7 +312,7 @@ int m5mols_write_reg(struct v4l2_subdev *sd,
 		dev_err(&client->dev, "failed WRITE[%d] at "
 				"cat[%02x] cmd[%02x], ret %d\n",
 				size, msg->buf[2], msg->buf[3], ret);
-	return ret;
+		return ret;
 	}
 
 	usleep_range(15000, 20000);	/* must be for stabilization */
@@ -368,7 +368,7 @@ int m5mols_set_mode(struct v4l2_subdev *sd, enum m5mols_mode mode)
 			mode = STATUS_SINGLE_CAPTURE;
 		ret = m5mols_check_busy(sd, CAT_SYSTEM, CAT0_STATUS,
 				m5mols_reg_status[mode]);
-	if (ret)
+		if (ret)
 			m5_err;
 	}
 	if (ret < 0)
@@ -562,7 +562,7 @@ static int m5mols_g_mbus_fmt(struct v4l2_subdev *sd,
 	*ffmt = info->fmt[res_type];
 	info->code = ffmt->code;
 
-			return 0;
+	return 0;
 }
 
 static int m5mols_into_monitor(struct v4l2_subdev *sd, int res_size)
@@ -593,7 +593,7 @@ static int m5mols_into_capture(struct v4l2_subdev *sd, int res_size)
 	 * 2. Enable Capture bit at Interrupt
 	 * 3. Lock AE/AWB
 	 * 4. Enter Still Capture mode
- */
+	 */
 
 	ret = m5mols_set_mode(sd, MODE_MONITOR);
 	if (!ret)
@@ -834,7 +834,7 @@ static int m5mols_start_capture(struct v4l2_subdev *sd)
 	 * 6. Start Capture
 	 * 7. Check interrupt and register value
 	 * 8. Get Image & Thumb size
- */
+	 */
 	ret = i2c_w8_capt_ctrl(sd, CATC_CAP_SEL_FRAME, true);	/* single capture */
 	if (!ret)
 		ret = i2c_w8_capt_parm(sd, CATB_YUVOUT_MAIN, reg_capt_fmt[0]);
@@ -927,7 +927,7 @@ static int m5mols_s_ctrl(struct v4l2_ctrl *ctrl)
 	if (!ret)
 		ret = m5mols_set_mode_restore(sd);
 
-		return ret;
+	return ret;
 }
 
 static int m5mols_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
@@ -996,12 +996,12 @@ static int m5mols_sensor_power(struct m5mols_info *info, bool enable)
 		if (info->set_power) {
 			ret = info->set_power(&c->dev, 1);
 			if (ret)
-		return ret;
+				return ret;
 		}
 
 		ret = regulator_bulk_enable(ARRAY_SIZE(supplies), supplies);
 		if (ret)
-		return ret;
+			return ret;
 
 		gpio_set_value(info->pdata->gpio_rst, info->pdata->enable_rst);
 		usleep_range(1000, 1000);
@@ -1056,14 +1056,14 @@ static void m5mols_irq_work(struct work_struct *work)
 					info->is_focus = false;
 				printk("%s = AF %02x, focus %d\n",
 						__func__, reg, info->is_focus);
-			break;
+				break;
 			case (1 << INT_BIT_CAPTURE):
 				printk("%s = CAPTURE\n", __func__);
 				if (!info->captured) {
 					wake_up_interruptible(&info->cap_wait);
 					info->captured = true;
 				}
-		break;
+				break;
 			case (1 << INT_BIT_ZOOM):
 			case (1 << INT_BIT_FRAME_SYNC):
 			case (1 << INT_BIT_FD):
@@ -1072,10 +1072,10 @@ static void m5mols_irq_work(struct work_struct *work)
 				printk("%s = Nothing : 0x%08x\n", __func__, reg);
 				break;
 			case (1 << INT_BIT_MODE):
-	default:
+			default:
 				break;
 			}
-	}
+		}
 	}
 }
 
@@ -1127,7 +1127,7 @@ static int m5mols_sensor_armboot(struct v4l2_subdev *sd)
 
 	m5mols_show_version(sd);
 
-		return ret;
+	return ret;
 }
 
 /*
@@ -1142,8 +1142,8 @@ static int m5mols_init_controls(struct m5mols_info *info)
 
 	/* check minimum & maximum of M5MOLS controls */
 	ret = i2c_r16_ae(sd, CAT3_MAX_GAIN_MON, (u32 *)&max_ex_mon);
-		if (ret)
-			return ret;
+	if (ret)
+		return ret;
 
 	/* set the controls using v4l2 control frameworks */
 	v4l2_ctrl_handler_init(&info->handle, 9);
@@ -1415,7 +1415,7 @@ static int m5mols_link_setup(struct media_entity *entity,
 			    const struct media_pad *remote, u32 flags)
 {
 	printk("%s\n", __func__);
-		return 0;
+	return 0;
 }
 static const struct media_entity_operations m5mols_media_ops = {
 	.link_setup = m5mols_link_setup,
@@ -1463,7 +1463,7 @@ static const struct v4l2_subdev_internal_ops m5mols_v4l2_internal_ops = {
 };
 
 static int m5mols_probe(struct i2c_client *client,
-				  const struct i2c_device_id *id)
+			 const struct i2c_device_id *id)
 {
 	const struct m5mols_platform_data *pdata =
 		client->dev.platform_data;
@@ -1492,15 +1492,15 @@ static int m5mols_probe(struct i2c_client *client,
 		return -ENOMEM;
 	}
 
-	info->pdata = pdata;
+	info->pdata	= pdata;
 	if (info->pdata->set_power)	/* for additional power if needed. */
-	info->set_power	= pdata->set_power;
+		info->set_power = pdata->set_power;
 
 	if (info->pdata->irq) {
 		INIT_WORK(&info->work, m5mols_irq_work);
 		ret = request_irq(info->pdata->irq, m5mols_irq_handler,
 				  IRQF_TRIGGER_RISING, MOD_NAME, &info->sd);
-	if (ret) {
+		if (ret) {
 			dev_err(&client->dev, "Failed to request irq: %d\n", ret);
 			return ret;
 		}
@@ -1542,7 +1542,7 @@ static int m5mols_probe(struct i2c_client *client,
 
 	v4l2_info(sd, "%s : m5mols driver probed success\n", __func__);
 
-		return 0;
+	return 0;
 
 out_reg:
 	regulator_bulk_free(ARRAY_SIZE(supplies), supplies);

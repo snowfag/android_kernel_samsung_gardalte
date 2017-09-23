@@ -19,7 +19,7 @@
 static bool is_siop_limited;
 #endif
 
-extern unsigned int system_rev;
+extern int system_rev;
 
 static int smb327_i2c_write(struct i2c_client *client,
 				int reg, u8 *buf)
@@ -275,28 +275,14 @@ static u8 smb327_set_fast_charging_current(struct i2c_client *client,
 static void smb327_charger_function_control(struct i2c_client *client)
 {
 	struct sec_charger_info *charger = i2c_get_clientdata(client);
-	union power_supply_propval bat_status;
-
-	u8 data, reg_data, charge_mode;
+	u8 reg_data, charge_mode;
 
 	smb327_set_writable(client, 1);
 
-	psy_do_property("battery", get,
-		POWER_SUPPLY_PROP_STATUS, bat_status);
-
-	if (bat_status.intval == POWER_SUPPLY_STATUS_FULL) {
-		/* clear IRQ */
-		data = 0xFF;
-		smb327_i2c_write(client, 0x30, &data);
-
-		reg_data = 0x64;
-		pr_info("%s : disable wtchdog irq(0x%02x)\n", __func__, reg_data);
-	} else {
-		if (system_rev < 10)
-			reg_data = 0x4E;
-		else
-			reg_data = 0x6E;
-	}
+	if (system_rev < 10)
+		reg_data = 0x4E;
+	else
+		reg_data = 0x6E;
 
 	smb327_i2c_write(client, SMB327_FUNCTION_CONTROL_B, &reg_data);
 
@@ -416,7 +402,7 @@ static void smb327_charger_otg_control(struct i2c_client *client, int enable)
 	smb327_set_writable(client, 0);
 }
 
-#if 0 // to fix build error - unused function
+#if 0 // to fix build error - unused function 
 static void smb327_irq_enable(struct i2c_client *client)
 {
 	u8 data;
@@ -438,29 +424,20 @@ static void smb327_irq_enable(struct i2c_client *client)
 
 	smb327_set_writable(client, 0);
 }
-#endif
+#endif 
 
 static void smb327_irq_disable(struct i2c_client *client)
 {
-	union power_supply_propval bat_status;
-	u8 reg_data, data;
+	u8 data;
 
 	smb327_set_writable(client, 1);
 
-	psy_do_property("battery", get,
-		POWER_SUPPLY_PROP_STATUS, bat_status);
+	if (system_rev < 10)
+		data = 0x4E;
+	else
+		data = 0x6E;
 
-	if (bat_status.intval == POWER_SUPPLY_STATUS_FULL) {
-		reg_data = 0x64;
-		pr_info("%s : disable wtchdog irq(0x%02x)\n", __func__, reg_data);
-	} else {
-		if (system_rev < 10)
-			reg_data = 0x4E;
-		else
-			reg_data = 0x6E;
-	}
-
-	smb327_i2c_write(client, 0x04, &reg_data);
+	smb327_i2c_write(client, 0x04, &data);
 
 	smb327_i2c_read(client,
 			SMB327_INTERRUPT_SIGNAL_SELECTION, &data);

@@ -119,7 +119,7 @@ static void exynos5250_set_frequency(unsigned int old_index,
 }
 
 static bool exynos5250_pms_change(unsigned int old_index,
-				  unsigned int new_index)
+	unsigned int new_index)
 {
 	/* Skip the apll change optimization, it won't happen very often */
 	return true;

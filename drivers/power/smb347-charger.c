@@ -704,13 +704,13 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 	 */
 	if (enable) {
 		ret = smb347_write(smb, CFG_FAULT_IRQ, CFG_FAULT_IRQ_DCIN_UV);
-	if (ret < 0)
-		goto fail;
+		if (ret < 0)
+			goto fail;
 
 		ret = smb347_write(smb, CFG_STATUS_IRQ,
 				   CFG_STATUS_IRQ_TERMINATION_OR_TAPER);
-	if (ret < 0)
-		goto fail;
+		if (ret < 0)
+			goto fail;
 
 		ret = smb347_read(smb, CFG_PIN);
 		if (ret < 0)
@@ -721,20 +721,20 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 		ret = smb347_write(smb, CFG_PIN, ret);
 	} else {
 		ret = smb347_write(smb, CFG_FAULT_IRQ, 0);
-	if (ret < 0)
-		goto fail;
+		if (ret < 0)
+			goto fail;
 
 		ret = smb347_write(smb, CFG_STATUS_IRQ, 0);
-	if (ret < 0)
-		goto fail;
+		if (ret < 0)
+			goto fail;
 
-	ret = smb347_read(smb, CFG_PIN);
-	if (ret < 0)
-		goto fail;
+		ret = smb347_read(smb, CFG_PIN);
+		if (ret < 0)
+			goto fail;
 
 		ret &= ~CFG_PIN_EN_CHARGER_ERROR;
 
-	ret = smb347_write(smb, CFG_PIN, ret);
+		ret = smb347_write(smb, CFG_PIN, ret);
 	}
 
 fail:
@@ -795,7 +795,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 		dev_info(&smb->client->dev, "charge terminated\n");
 		smb->is_fully_charged = true;
 		smb347_charging_disable(smb);
-			power_supply_changed(&smb->battery);
+		power_supply_changed(&smb->battery);
 		ret = IRQ_HANDLED;
 	}
 
@@ -809,10 +809,10 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	if (irqstat[4] & (IRQSTAT_E_USBIN_UV_IRQ | IRQSTAT_E_DCIN_UV_IRQ))
 		ret = IRQ_HANDLED;
 
-		if (smb347_update_status(smb) > 0) {
-			smb347_update_online(smb);
-			power_supply_changed(&smb->mains);
-			power_supply_changed(&smb->usb);
+	if (smb347_update_status(smb) > 0) {
+		smb347_update_online(smb);
+		power_supply_changed(&smb->mains);
+		power_supply_changed(&smb->usb);
 		ret = IRQ_HANDLED;
 	}
 
@@ -863,16 +863,16 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	 * first.
 	 */
 	ret = smb347_set_charge_current(smb);
-		if (ret < 0)
-			goto fail;
+	if (ret < 0)
+		goto fail;
 
 	ret = smb347_set_current_limits(smb);
-		if (ret < 0)
-			goto fail;
+	if (ret < 0)
+		goto fail;
 
 	ret = smb347_set_voltage_limits(smb);
-		if (ret < 0)
-			goto fail;
+	if (ret < 0)
+		goto fail;
 
 // HACK for Manta pre-alpha 0.2, TH_BATTERY not connected properly
 #if 0 // HACK
@@ -895,8 +895,8 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	}
 
 	ret = smb347_read(smb, CFG_OTHER);
-		if (ret < 0)
-			goto fail;
+	if (ret < 0)
+		goto fail;
 
 	/*
 	 * If configured by platform data, we enable hardware Auto-OTG
@@ -964,24 +964,24 @@ static int smb347_hw_init(struct smb347_charger *smb)
 
 	if ((smb->pdata->irq_gpio >= 0) &&
 	    !smb->pdata->disable_stat_interrupts) {
-	/*
+		/*
 		 * Configure the STAT output to be suitable for interrupts:
 		 * disable all other output (except interrupts) and make it
 		 * active low.
-	 */
-	ret = smb347_read(smb, CFG_STAT);
-	if (ret < 0)
+		 */
+		ret = smb347_read(smb, CFG_STAT);
+		if (ret < 0)
 			goto fail;
 
-	ret &= ~CFG_STAT_ACTIVE_HIGH;
-	ret |= CFG_STAT_DISABLED;
+		ret &= ~CFG_STAT_ACTIVE_HIGH;
+		ret |= CFG_STAT_DISABLED;
 
-	ret = smb347_write(smb, CFG_STAT, ret);
-	if (ret < 0)
+		ret = smb347_write(smb, CFG_STAT, ret);
+		if (ret < 0)
 			goto fail;
 
-	ret = smb347_irq_enable(smb);
-	if (ret < 0)
+		ret = smb347_irq_enable(smb);
+		if (ret < 0)
 			goto fail;
 	}
 

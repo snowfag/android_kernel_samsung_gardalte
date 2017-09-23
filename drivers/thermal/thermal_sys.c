@@ -866,30 +866,30 @@ static void thermal_zone_device_passive(struct thermal_zone_device *tz,
 		for (count = trip; count > 0; count--) {
 			if (temp >= temp_level[count - 1]) {
 				list_for_each_entry(instance, &tz->cooling_devices, node) {
-				cdev = instance->cdev;
+					cdev = instance->cdev;
 					cdev->ops->set_cur_state(cdev, count);
-			}
+				}
 				break;
+			}
 		}
-	}
 		tz->passive = true;
 	} else {
 		if (tz->ops->get_num_uncooled_cluster)
 			uncooled_cluster = tz->ops->get_num_uncooled_cluster();
 		else
 			uncooled_cluster = 1;
-	list_for_each_entry(instance, &tz->cooling_devices, node) {
-		cdev = instance->cdev;
-		cdev->ops->get_cur_state(cdev, &state);
+		list_for_each_entry(instance, &tz->cooling_devices, node) {
+			cdev = instance->cdev;
+			cdev->ops->get_cur_state(cdev, &state);
 			if (state > 0) {
-			cdev->ops->set_cur_state(cdev, --state);
+				cdev->ops->set_cur_state(cdev, --state);
 				uncooled_cluster--;
 				if (!uncooled_cluster) {
 					if (state == 0 && tz->passive)
-			tz->passive = false;
+						tz->passive = false;
 					break;
 				}
-	}
+			}
 		}
 	}
 	kfree(temp_level);
@@ -1223,9 +1223,9 @@ void thermal_zone_device_update(struct thermal_zone_device *tz)
 				} else {
 					if(tz->passive)
 						pr_debug("Current Cooling mode is passive!!, do not change cpufreq\n");
-				else
-					cdev->ops->set_cur_state(cdev, 0);
-			}
+					else
+						cdev->ops->set_cur_state(cdev, 0);
+				}
 			}
 			break;
 		case THERMAL_TRIP_PASSIVE:
@@ -1458,7 +1458,7 @@ struct thermal_zone_device *thermal_zone_device_register(char *type,
 	}
 
 	result = device_create_file(&tz->device, &dev_attr_trip_freq);
-		if (result)
+	if (result)
 		goto unregister;
 
 	result = device_create_file(&tz->device, &dev_attr_oneshot_trip_freq);
@@ -1474,8 +1474,8 @@ struct thermal_zone_device *thermal_zone_device_register(char *type,
 		goto unregister;
 
 	result = create_trip_attrs(tz, mask);
-		if (result)
-			goto unregister;
+	if (result)
+		goto unregister;
 
 	for (count = 0; count < trips; count++) {
 		tz->ops->get_trip_type(tz, count, &trip_type);
@@ -1675,6 +1675,7 @@ static int __init thermal_init(void)
 		idr_destroy(&thermal_cdev_idr);
 		mutex_destroy(&thermal_idr_lock);
 		mutex_destroy(&thermal_list_lock);
+		return result;
 	}
 	result = genetlink_init();
 	return result;

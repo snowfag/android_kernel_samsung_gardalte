@@ -535,7 +535,7 @@ static void __init set_volt_table(void)
 	/* Not supported */
 	if (samsung_rev() < EXYNOS4412_REV_2_0) {
 		max_support_idx = L1;
-	exynos4x12_freq_table[L0].frequency = CPUFREQ_ENTRY_INVALID;
+		exynos4x12_freq_table[L0].frequency = CPUFREQ_ENTRY_INVALID;
 	}
 
 	pr_info("DVFS : VDD_ARM Voltage table set with %d Group\n", exynos_result_of_asv);

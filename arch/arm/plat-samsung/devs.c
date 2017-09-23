@@ -680,7 +680,11 @@ struct platform_device s3c_device_i2c0 = {
 struct s3c2410_platform_i2c default_i2c_data __initdata = {
 	.flags		= 0,
 	.slave_addr	= 0x10,
+#ifdef CONFIG_SOC_EXYNOS4415
+	.frequency	= 405*1000,
+#else
 	.frequency	= 400*1000,
+#endif
 	.sda_delay	= 100,
 };
 
@@ -1074,7 +1078,7 @@ void __init s3c_ide_set_platdata(struct s3c_ide_platdata *pdata)
 	struct s3c_ide_platdata *npd;
 
 	npd = n3c_set_platdata(pdata, sizeof(struct s3c_ide_platdata),
-			 &s3c_device_cfcon);
+				 &s3c_device_cfcon);
 	if (!npd)
 		printk(KERN_ERR "%s: s3c_set_platdata is fail\n", __func__);
 }
@@ -1333,7 +1337,7 @@ void __init s3c64xx_onenand1_set_platdata(struct onenand_platform_data *pdata)
 	struct onenand_platform_data *npd;
 
 	npd = s3c_set_platdata(pdata, sizeof(struct onenand_platform_data),
-			 &s3c64xx_device_onenand1);
+				 &s3c64xx_device_onenand1);
 	if (!npd)
 		printk(KERN_ERR "%s: s3c_set_platdata is fail\n", __func__);
 }
@@ -1496,7 +1500,7 @@ void __init s3c24xx_mci_set_platdata(struct s3c24xx_mci_pdata *pdata)
 	struct s3c24xx_mci_pdata *npd;
 
 	npd = s3c_set_platdata(pdata, sizeof(struct s3c24xx_mci_pdata),
-			 &s3c_device_sdi);
+				 &s3c_device_sdi);
 	if (!npd)
 		printk(KERN_ERR "%s: s3c_set_platdata is fail\n", __func__);
 }
@@ -1559,7 +1563,7 @@ void __init s3c24xx_ts_set_platdata(struct s3c2410_ts_mach_info *hard_s3c2410ts_
 	struct s3c2410_ts_mach_info *npd;
 
 	npd = s3c_set_platdata(hard_s3c2410ts_info,
-			 sizeof(struct s3c2410_ts_mach_info), &s3c_device_ts);
+			sizeof(struct s3c2410_ts_mach_info), &s3c_device_ts);
 	if (!npd)
 		printk(KERN_ERR "%s: s3c_set_platdata is fail\n", __func__);
 }
@@ -1592,7 +1596,7 @@ void __init s3c24xx_ts_set_platdata(struct s3c2410_ts_mach_info *pd)
 		pd = &default_ts_data;
 
 	npd = s3c_set_platdata(pd, sizeof(struct s3c2410_ts_mach_info),
-			 &s3c_device_ts);
+				 &s3c_device_ts);
 	if (!npd)
 		printk(KERN_ERR "%s: s3c_set_platdata is fail\n", __func__);
 }
@@ -1712,7 +1716,7 @@ void __init s3c_ohci_set_platdata(struct s3c2410_hcd_info *info)
 	struct s3c2410_hcd_info *npd;
 
 	npd = s3c_set_platdata(info, sizeof(struct s3c2410_hcd_info),
-			 &s3c_device_ohci);
+				 &s3c_device_ohci);
 	if (!npd)
 		printk(KERN_ERR "%s: s3c_set_platdata is fail\n", __func__);
 }
@@ -2081,7 +2085,7 @@ void __init s3c64xx_spi3_set_platdata(struct s3c64xx_spi_info *pd,
 }
 #endif /* CONFIG_S3C64XX_DEV_SPI3 */
 
-#ifdef CONFIG_MALI_T6XX
+#if defined(CONFIG_MALI_T6XX) || defined(CONFIG_MALI_MIDGARD_WK04)
 static struct resource g3d_resource[] = {
 	[0] = DEFINE_RES_MEM(EXYNOS5_PA_G3D, (SZ_4K * 5)),
 	[1] = DEFINE_RES_IRQ(JOB_IRQ_NUMBER),
@@ -2099,7 +2103,7 @@ struct platform_device exynos5_device_g3d = {
 		.coherent_dma_mask	= DMA_BIT_MASK(32),
 	},
 };
-#endif /*CONFIG_MALI_T6XX*/
+#endif /* CONFIG_MALI_T6XX || CONFIG_MALI_MIDGARD_WK04 */
 struct platform_device exynos4_device_g3d = {
 	.name	= "mali_dev",
 	.id		= 0,

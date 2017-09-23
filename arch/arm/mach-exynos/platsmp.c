@@ -92,6 +92,9 @@ void __cpuinit platform_secondary_init(unsigned int cpu)
 	 */
 	write_pen_release(-1);
 
+#ifdef CONFIG_EXYNOS5_MP
+	cpu = cpu ^ 0x4;
+#endif
 #ifdef CONFIG_ARM_TRUSTZONE
 	clear_boot_flag(cpu, HOTPLUG);
 #endif
@@ -182,9 +185,17 @@ static int exynos_power_up_cpu(unsigned int cpu)
 	/*
 	 * Check Power down cpu wait on WFE, and occur SW reset
 	 */
+	timeout = 100;
 	if (soc_is_exynos3470() || soc_is_exynos3250()) {
-		while(!__raw_readl(EXYNOS_PMUREG(0x0908)))
+		while(!__raw_readl(EXYNOS_PMUREG(0x0908)) && timeout) {
 			udelay(10);
+			timeout--;
+		}
+
+		if (timeout == 0) {
+			printk(KERN_ERR "failed to get SW reset for cpu%d\n", cpu);
+			return -ETIMEDOUT;
+		}
 
 		udelay(10);
 
@@ -227,7 +238,7 @@ static int exynos_power_up_cpu(unsigned int cpu)
 				val |= EXYNOS5_USE_SC_FEEDBACK;
 				__raw_writel(val, power_base + 0x8);
 			}
-			lpe_bits = 0x000F000F;
+			lpe_bits = 0x800F000F;
 			lpe_bits_status = 0x4000F;
 #ifndef CONFIG_ARM_TRUSTZONE
 			__raw_writel(0, cpu_boot_info[cpu].boot_base);
@@ -250,7 +261,7 @@ static int exynos_power_up_cpu(unsigned int cpu)
 		while (timeout) {
 			val = __raw_readl(power_base + 0x4);
 
-			if ((val & lpe_bits) ==
+			if ((val & lpe_bits_status) ==
 			     lpe_bits_status)
 				break;
 

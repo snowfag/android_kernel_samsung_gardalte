@@ -36,8 +36,8 @@
 #include <linux/sensor/sensors_core.h>
 #include "mpu6500_selftest.h"
 
-#define MPU6500_ACCEL_CAL_PATH	"/efs/calibration_data"
-#define MPU6500_GYRO_CAL_PATH	"/efs/gyro_cal_data"
+#define MPU6500_ACCEL_CAL_PATH	"/efs/FactoryApp/accel_calibration_data"
+#define MPU6500_GYRO_CAL_PATH	"/efs/FactoryApp/gyro_cal_data"
 #define MODEL_NAME	"MPU6515"
 #define VENDOR_NAME	"INVENSENSE"
 #endif
@@ -48,12 +48,23 @@
 
 extern unsigned int system_rev;
 
-
+void check_fifo_rate(int *fifo_rate)
+{
+	if (*fifo_rate > MAX_FIFO_RATE)
+		*fifo_rate = MAX_FIFO_RATE;
+	else if (*fifo_rate < MIN_FIFO_RATE)
+		*fifo_rate = MIN_FIFO_RATE;
+}
 s64 get_time_ns(void)
 {
 	struct timespec ts;
-	ktime_get_ts(&ts);
-	return timespec_to_ns(&ts);
+	s64 timestamp;
+	ts = ktime_to_timespec(ktime_get_boottime());
+	timestamp = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+	if (timestamp < 0)
+		pr_err("[INV] %s invalid time = %lld\n", __func__, timestamp);
+
+	return timestamp;
 }
 
 s64 get_time_timeofday(void)
@@ -258,6 +269,82 @@ done:
 	return err;
 }
 
+static int gyro_open_calibration(struct inv_mpu_state *st)
+{
+	struct file *cal_filp = NULL;
+	int err = 0;
+	mm_segment_t old_fs;
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	cal_filp = filp_open(MPU6500_GYRO_CAL_PATH,
+		O_RDONLY, S_IRUGO | S_IWUSR | S_IWGRP);
+	if (IS_ERR(cal_filp)) {
+		pr_err("[SENSOR] %s: - Can't open calibration file\n", __func__);
+		set_fs(old_fs);
+		err = PTR_ERR(cal_filp);
+		goto done;
+	}
+
+	err = cal_filp->f_op->read(cal_filp,
+		(char *)&st->gyro_bias, 3 * sizeof(int),
+			&cal_filp->f_pos);
+	if (err != 3 * sizeof(int)) {
+		pr_err("[SENSOR] %s: - Can't read the cal data from file\n", __func__);
+		err = -EIO;
+	}
+
+	pr_info("[SENSOR] %s: - (%d,%d,%d)\n", __func__,
+		st->gyro_bias[0], st->gyro_bias[1],	st->gyro_bias[2]);
+
+	filp_close(cal_filp, current->files);
+done:
+	set_fs(old_fs);
+	return err;
+}
+
+static int gyro_do_calibrate(struct inv_mpu_state *st)
+{
+	struct file *cal_filp;
+	int err;
+	mm_segment_t old_fs;
+
+	/* selftest change to 2000dps */
+	st->gyro_bias[0] = st->gyro_bias[0];
+	st->gyro_bias[1] = st->gyro_bias[1];
+	st->gyro_bias[2] = st->gyro_bias[2];
+
+	pr_info("[SENSOR] %s: - cal data (%d,%d,%d)\n", __func__,
+		st->gyro_bias[0], st->gyro_bias[1], st->gyro_bias[2]);
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	cal_filp = filp_open(MPU6500_GYRO_CAL_PATH,
+			O_CREAT | O_TRUNC | O_WRONLY,
+			S_IRUGO | S_IWUSR | S_IWGRP);
+	if (IS_ERR(cal_filp)) {
+		pr_err("[SENSOR] %s: - Can't open calibration file\n", __func__);
+		set_fs(old_fs);
+		err = PTR_ERR(cal_filp);
+		goto done;
+	}
+
+	err = cal_filp->f_op->write(cal_filp,
+		(char *)&st->gyro_bias, 3 * sizeof(int),
+			&cal_filp->f_pos);
+	if (err != 3 * sizeof(int)) {
+		pr_err("[SENSOR] %s: - Can't write the cal data to file\n", __func__);
+		err = -EIO;
+	}
+
+	filp_close(cal_filp, current->files);
+done:
+	set_fs(old_fs);
+	return err;
+}
+
 
 static int inv_switch_engine(struct inv_mpu_state *st, bool en, u32 mask)
 {
@@ -300,7 +387,7 @@ static int inv_switch_engine(struct inv_mpu_state *st, bool en, u32 mask)
 
 	if ((BIT_PWR_GYRO_STBY == mask) && en) {
 		/* only gyro on needs sensor up time */
-		mdelay(SENSOR_UP_TIME);
+		msleep(SENSOR_UP_TIME);
 		/* after gyro is on & stable, switch internal clock to PLL */
 		mgmt_1 |= INV_CLK_PLL;
 		result = inv_i2c_single_write(st, reg->pwr_mgmt_1,
@@ -309,7 +396,7 @@ static int inv_switch_engine(struct inv_mpu_state *st, bool en, u32 mask)
 			return result;
 	}
 	if ((BIT_PWR_ACCEL_STBY == mask) && en)
-		mdelay(REG_UP_TIME);
+		usleep_range(REG_UP_TIME, REG_UP_TIME + 1000);
 
 	return 0;
 }
@@ -365,7 +452,7 @@ static int set_power_itg(struct inv_mpu_state *st, bool power_on)
 		return result;
 
 	if (power_on)
-		mdelay(REG_UP_TIME);
+		usleep_range(REG_UP_TIME, REG_UP_TIME + 1000);
 
 	st->chip_config.is_asleep = !power_on;
 
@@ -391,11 +478,11 @@ static int inv_init_config(struct iio_dev *indio_dev)
 	reg = &st->reg;
 
 	result = inv_i2c_single_write(st, reg->gyro_config,
-				INV_FSR_500DPS << GYRO_CONFIG_FSR_SHIFT);
+				INV_FSR_2000DPS << GYRO_CONFIG_FSR_SHIFT);
 	if (result)
 		return result;
 
-	st->chip_config.fsr = INV_FSR_500DPS;
+	st->chip_config.fsr = INV_FSR_2000DPS;
 
 	result = inv_i2c_single_write(st, reg->lpf, INV_FILTER_42HZ);
 	if (result)
@@ -600,8 +687,11 @@ int inv_reset_offset_reg(struct inv_mpu_state *st, bool en)
  */
 static int inv_fifo_rate_store(struct inv_mpu_state *st, int fifo_rate)
 {
-	if ((fifo_rate < MIN_FIFO_RATE) || (fifo_rate > MAX_FIFO_RATE))
-		return -EINVAL;
+	if (fifo_rate < MIN_FIFO_RATE)
+		fifo_rate = MIN_FIFO_RATE;
+	else if (fifo_rate > MAX_FIFO_RATE)
+		fifo_rate = MAX_FIFO_RATE;
+
 	if (fifo_rate == st->chip_config.fifo_rate)
 		return 0;
 
@@ -775,8 +865,10 @@ static ssize_t _dmp_attr_store(struct device *dev,
 		st->chip_config.step_indicator_on = !!data;
 		break;
 	case ATTR_DMP_BATCHMODE_TIMEOUT:
-		if (data < 0 || data > INT_MAX)
-			return -EINVAL;
+		if (data > INT_MAX)
+			data = INT_MAX;
+		else if (data < 0)
+			data = 0;
 		st->batch.timeout = data;
 		break;
 	case ATTR_DMP_BATCHMODE_WAKE_FIFO_FULL:
@@ -784,36 +876,37 @@ static ssize_t _dmp_attr_store(struct device *dev,
 		st->batch.overflow_on = 0;
 		break;
 	case ATTR_DMP_SIX_Q_ON:
+		st->sensor[SENSOR_SIXQ].old_ts = 0;
 		st->sensor[SENSOR_SIXQ].on = !!data;
 		break;
 	case ATTR_DMP_SIX_Q_RATE:
-		if (data > MPU_DEFAULT_DMP_FREQ || data < 0)
-			return -EINVAL;
+		check_fifo_rate(&data);
 		st->sensor[SENSOR_SIXQ].rate = data;
 		st->sensor[SENSOR_SIXQ].dur = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_SIXQ].dur *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_DMP_LPQ_ON:
+		st->sensor[SENSOR_LPQ].old_ts = 0;
 		st->sensor[SENSOR_LPQ].on = !!data;
 		break;
 	case ATTR_DMP_LPQ_RATE:
-		if (data > MPU_DEFAULT_DMP_FREQ || data < 0)
-			return -EINVAL;
+		check_fifo_rate(&data);
 		st->sensor[SENSOR_LPQ].rate = data;
 		st->sensor[SENSOR_LPQ].dur = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_LPQ].dur *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_DMP_PED_Q_ON:
+		st->sensor[SENSOR_PEDQ].old_ts = 0;
 		st->sensor[SENSOR_PEDQ].on = !!data;
 		break;
 	case ATTR_DMP_PED_Q_RATE:
-		if (data > MPU_DEFAULT_DMP_FREQ || data < 0)
-			return -EINVAL;
+		check_fifo_rate(&data);
 		st->sensor[SENSOR_PEDQ].rate = data;
 		st->sensor[SENSOR_PEDQ].dur = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_PEDQ].dur *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_DMP_STEP_DETECTOR_ON:
+		st->sensor[SENSOR_STEP].old_ts = 0ULL;
 		st->sensor[SENSOR_STEP].on = !!data;
 		break;
 	default:
@@ -937,6 +1030,8 @@ static ssize_t _dmp_mem_store(struct device *dev,
 	struct inv_mpu_state *st = iio_priv(indio_dev);
 	struct iio_dev_attr *this_attr = to_iio_dev_attr(attr);
 	int result, data;
+	u8 sc_buf[IIO_BUFFER_BYTES];
+	u16 hdr;
 
 	if (st->chip_config.enable)
 		return -EBUSY;
@@ -962,9 +1057,16 @@ static ssize_t _dmp_mem_store(struct device *dev,
 		result = inv_enable_pedometer(st, !!data);
 
 		/*reset internal pedometer step buffer*/
-		if(!!data)
+		if(!!data) {
 			result = inv_reset_pedometer_internal_timer(st);
-		else
+			// Sending dummy data to begin polling at HAL
+			hdr = STEP_COUNTER_HDR;
+			memcpy(sc_buf, &hdr, sizeof(hdr));
+			mutex_lock(&st->iio_buf_write_lock);
+			iio_push_to_buffer(indio_dev->buffer, sc_buf, 0);
+			mutex_unlock(&st->iio_buf_write_lock);
+			pr_info("step counter dummy data sent\n");
+		} else
 			st->shealth.interrupt_mask = 0;
 
 		if (result)
@@ -2067,17 +2169,22 @@ static ssize_t _attr_store(struct device *dev,
 		}
 		st->self_test.threshold = data;
 	case ATTR_GYRO_ENABLE:
+		st->sensor[SENSOR_GYRO].old_ts = 0;
 		st->chip_config.gyro_enable = !!data;
+		if (st->chip_config.gyro_enable)
+			gyro_open_calibration(st);
 		break;
 	case ATTR_GYRO_FIFO_ENABLE:
 		st->sensor[SENSOR_GYRO].on = !!data;
 		break;
 	case ATTR_GYRO_RATE:
+		check_fifo_rate(&data);
 		st->sensor[SENSOR_GYRO].rate = data;
 		st->sensor[SENSOR_GYRO].dur  = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_GYRO].dur  *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_ACCEL_ENABLE:
+		st->sensor[SENSOR_ACCEL].old_ts = 0;
 		st->chip_config.accel_enable = !!data;
 		if (st->chip_config.accel_enable)
 			accel_open_calibration(st);
@@ -2086,18 +2193,17 @@ static ssize_t _attr_store(struct device *dev,
 		st->sensor[SENSOR_ACCEL].on = !!data;
 		break;
 	case ATTR_ACCEL_RATE:
+		check_fifo_rate(&data);
 		st->sensor[SENSOR_ACCEL].rate = data;
 		st->sensor[SENSOR_ACCEL].dur  = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_ACCEL].dur  *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_COMPASS_ENABLE:
+		st->sensor[SENSOR_COMPASS].old_ts = 0;
 		st->sensor[SENSOR_COMPASS].on = !!data;
 		break;
 	case ATTR_COMPASS_RATE:
-		if (data <= 0) {
-			result = -EINVAL;
-			goto attr_store_fail;
-		}
+		check_fifo_rate(&data);
 		if ((MSEC_PER_SEC / st->slave_compass->rate_scale) < data)
 			data = MSEC_PER_SEC / st->slave_compass->rate_scale;
 
@@ -2106,13 +2212,11 @@ static ssize_t _attr_store(struct device *dev,
 		st->sensor[SENSOR_COMPASS].dur  *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_PRESSURE_ENABLE:
+		st->sensor[SENSOR_PRESSURE].old_ts = 0;
 		st->sensor[SENSOR_PRESSURE].on = !!data;
 		break;
 	case ATTR_PRESSURE_RATE:
-		if (data <= 0) {
-			result = -EINVAL;
-			goto attr_store_fail;
-		}
+		check_fifo_rate(&data);
 		if ((MSEC_PER_SEC / st->slave_pressure->rate_scale) < data)
 			data = MSEC_PER_SEC / st->slave_pressure->rate_scale;
 
@@ -2127,6 +2231,7 @@ static ssize_t _attr_store(struct device *dev,
 		result = inv_firmware_loaded(st, data);
 		break;
 	case ATTR_SAMPLING_FREQ:
+		check_fifo_rate(&data);
 		result = inv_fifo_rate_store(st, data);
 		break;
 #ifdef CONFIG_INV_TESTING
@@ -3380,10 +3485,15 @@ retry:
 			pr_err("%s : bypass error", __func__);
 	}
 
-	if((result | hw_result) == 0)
+	if((result | hw_result) == 0) {
 		pr_info("%s : selftest success. ret:%d\n", __func__, hw_result | hw_result);
-	else
+		gyro_do_calibrate(st);
+	} else {
 		pr_info("%s : selftest failed. ret:%d\n", __func__, hw_result | hw_result);
+		st->gyro_bias[0] = 0;
+		st->gyro_bias[1] = 0;
+		st->gyro_bias[2] = 0;
+	}
 
 	pr_info("%s : %d.%03d,%d.%03d,%d.%03d,\n", __func__,
 		(int)abs(scaled_gyro_bias[0] / 1000),
@@ -3879,6 +3989,7 @@ static int inv_mpu_probe(struct i2c_client *client,
 	INIT_KFIFO(st->timestamps);
 	spin_lock_init(&st->time_stamp_lock);
 	mutex_init(&st->suspend_resume_lock);
+	mutex_init(&st->iio_buf_write_lock);
 	wake_lock_init(&st->shealth.wake_lock, WAKE_LOCK_SUSPEND, "inv_iio");
 
 	result = st->set_power_state(st, false);
@@ -3926,6 +4037,7 @@ err_gyro_sensor_register_failed:
 #endif
 
 out_remove_dmp_sysfs:
+	mutex_destroy(&st->iio_buf_write_lock);
 	mutex_destroy(&st->suspend_resume_lock);
 	kfifo_free(&st->timestamps);
 out_unreg_iio:
@@ -4041,6 +4153,7 @@ static int inv_mpu_resume(struct device *dev)
 	} else if (st->chip_config.enable) {
 		result = st->set_power_state(st, true);
 	}
+	st->suspend_state = false;
 	enable_irq(st->client->irq);
 
 	return result;
@@ -4059,11 +4172,20 @@ static int inv_mpu_suspend(struct device *dev)
 {
 	struct iio_dev *indio_dev = i2c_get_clientdata(to_i2c_client(dev));
 	struct inv_mpu_state *st = iio_priv(indio_dev);
-	int result;
+	int result, i;
 	u8 d =0;
 	pr_info("%s inv_mpu_suspend (%d,%d)\n", st->hw->name,
 		st->chip_config.dmp_on, st->chip_config.enable);
 	disable_irq(st->client->irq);
+	st->suspend_state = true;
+
+	/* If some application does not unregister the sensor in suspend,
+	 * then on resume, it could result in large looping because of large difference
+	 * between old and new timestamp. So set old timestamp to 0 on suspend.
+	 */
+
+	for (i = 0; i < SENSOR_NUM_MAX; i++)
+		st->sensor[i].old_ts = 0ULL;
 
 	result = 0;
 	if (st->chip_config.dmp_on && st->chip_config.enable) {

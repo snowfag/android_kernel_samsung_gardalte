@@ -52,12 +52,12 @@ static void power_supply_changed_work(struct work_struct *work)
 		psy->changed = false;
 		spin_unlock_irqrestore(&psy->changed_lock, flags);
 
-	class_for_each_device(power_supply_class, NULL, psy,
-			      __power_supply_changed_work);
+		class_for_each_device(power_supply_class, NULL, psy,
+				      __power_supply_changed_work);
 
-	power_supply_update_leds(psy);
+		power_supply_update_leds(psy);
 
-	kobject_uevent(&psy->dev->kobj, KOBJ_CHANGE);
+		kobject_uevent(&psy->dev->kobj, KOBJ_CHANGE);
 		spin_lock_irqsave(&psy->changed_lock, flags);
 	}
 	if (!psy->changed)

@@ -244,8 +244,7 @@ void *vb2_ion_private_alloc(void *alloc_ctx, size_t size, int write, int plane)
 
 	mutex_lock(&ctx->lock);
 	if (ctx_iommu(ctx) && !ctx->protected) {
-		buf->cookie.ioaddr = iovmm_map(ctx->dev,
-					       buf->cookie.sgt->sgl, 0,
+		buf->cookie.ioaddr = ion_iovmm_map(buf->attachment, 0,
 					       buf->size, buf->direction, plane);
 		if (IS_ERR_VALUE(buf->cookie.ioaddr)) {
 			ret = (int)buf->cookie.ioaddr;
@@ -288,7 +287,7 @@ void vb2_ion_private_free(void *cookie)
 	ctx = buf->ctx;
 	mutex_lock(&ctx->lock);
 	if (ctx_iommu(ctx) && !ctx->protected)
-		iovmm_unmap(ctx->dev, buf->cookie.ioaddr);
+		ion_iovmm_unmap(buf->attachment, buf->cookie.ioaddr);
 	mutex_unlock(&ctx->lock);
 
 	dma_buf_unmap_attachment(buf->attachment, buf->cookie.sgt,
@@ -473,8 +472,7 @@ static int vb2_ion_map_dmabuf(void *mem_priv, int plane)
 
 	mutex_lock(&ctx->lock);
 	if (ctx_iommu(ctx) && !ctx->protected && buf->cookie.ioaddr == 0) {
-		buf->cookie.ioaddr = iovmm_map(ctx->dev,
-				       buf->cookie.sgt->sgl, 0, buf->size,
+		buf->cookie.ioaddr = ion_iovmm_map(buf->attachment, 0, buf->size,
 				       buf->direction, plane);
 		if (IS_ERR_VALUE(buf->cookie.ioaddr)) {
 			pr_err("buf->cookie.ioaddr is error: %d\n",
@@ -519,7 +517,7 @@ static void vb2_ion_detach_dmabuf(void *mem_priv)
 
 	mutex_lock(&ctx->lock);
 	if (buf->cookie.ioaddr && ctx_iommu(ctx) && !ctx->protected ) {
-		iovmm_unmap(ctx->dev, buf->cookie.ioaddr);
+		ion_iovmm_unmap(buf->attachment, buf->cookie.ioaddr);
 		buf->cookie.ioaddr = 0;
 	}
 	mutex_unlock(&ctx->lock);

@@ -70,10 +70,10 @@ static int devfreq_simple_ondemand_func(struct devfreq *df,
 	if (err)
 		return err;
 
-		if (data->upthreshold)
-			dfso_upthreshold = data->upthreshold;
-		if (data->downdifferential)
-			dfso_downdifferential = data->downdifferential;
+	if (data->upthreshold)
+		dfso_upthreshold = data->upthreshold;
+	if (data->downdifferential)
+		dfso_downdifferential = data->downdifferential;
 	if (data->multiplication_weight)
 		dfso_multiplication_weight = data->multiplication_weight;
 
